@@ -18,49 +18,55 @@
 
         <div class="controls">
             <input type="file" id="imageInput" multiple accept="image/*">
-            <div id="sliderContainer" class="hidden">
-                <label for="progressSlider">Scrub through timeline:</label>
-                <input type="range" id="progressSlider" min="0" max="0" value="0" step="1">
-                <div class="info-row">
-                    <div class="label-control">
-                        <label for="imageLabel">Label for GIF:</label>
-                        <input type="text" id="imageLabel" class="label-input">
-                    </div>
-                    <div class="file-name" id="fileNameDisplay"></div>
-                </div>
-                <div class="info-row">
-                    <div class="label-control">
-                        <label for="compositeTitle">Composite Title:</label>
-                        <input type="text" id="compositeTitle" class="label-input" placeholder="e.g. My Transformation">
-                    </div>
-                </div>
-                <div class="options-row">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
-                    </label>
-                    <div class="size-control">
-                        <label for="gifSize">Output Size:</label>
-                        <select id="gifSize" class="label-input">
-                            <option value="original">Original (Full Quality)</option>
-                            <option value="1080" selected>Social Media (1080px)</option>
-                            <option value="720">Medium (720px)</option>
-                            <option value="480">Small (480px)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="actions">
-                    <button id="createGifBtn" class="btn">Create GIF</button>
-                    <button id="createCompositeBtn" class="btn">Create Side-by-Side</button>
-                </div>
-                <div id="gifResult" class="gif-result hidden"></div>
-                <div id="compositeResult" class="gif-result hidden"></div>
-            </div>
         </div>
 
         <div class="viewer-area">
             <div id="mainDisplay" class="main-display">
                 <div class="placeholder">No images loaded</div>
             </div>
+        </div>
+
+        <div id="sliderContainer" class="hidden">
+            <label for="progressSlider">Scrub through timeline:</label>
+            <input type="range" id="progressSlider" min="0" max="0" value="0" step="1">
+            <div class="info-row">
+                <div class="label-control">
+                    <label for="imageLabel">Label for GIF:</label>
+                    <input type="text" id="imageLabel" class="label-input">
+                </div>
+                <div class="rotate-controls">
+                    <button id="rotateLeftBtn" class="btn-icon" title="Rotate Left">↺</button>
+                    <button id="rotateRightBtn" class="btn-icon" title="Rotate Right">↻</button>
+                    <button id="flipBtn" class="btn-icon" title="Flip Horizontally">⇄</button>
+                </div>
+                <div class="file-name" id="fileNameDisplay"></div>
+            </div>
+            <div class="info-row">
+                <div class="label-control">
+                    <label for="compositeTitle">Composite Title:</label>
+                    <input type="text" id="compositeTitle" class="label-input" placeholder="e.g. My Transformation">
+                </div>
+            </div>
+            <div class="options-row">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
+                </label>
+                <div class="size-control">
+                    <label for="gifSize">Output Size:</label>
+                    <select id="gifSize" class="label-input">
+                        <option value="original">Original (Full Quality)</option>
+                        <option value="1080" selected>Social Media (1080px)</option>
+                        <option value="720">Medium (720px)</option>
+                        <option value="480">Small (480px)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="createGifBtn" class="btn">Create GIF</button>
+                <button id="createCompositeBtn" class="btn">Create Side-by-Side</button>
+            </div>
+            <div id="gifResult" class="gif-result hidden"></div>
+            <div id="compositeResult" class="gif-result hidden"></div>
         </div>
 
         <div id="thumbnails" class="thumbnails">

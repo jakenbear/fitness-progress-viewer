@@ -9,6 +9,9 @@ const fileNameDisplay = document.getElementById('fileNameDisplay');
 const ghostModeCheckbox = document.getElementById('ghostMode');
 const createGifBtn = document.getElementById('createGifBtn');
 const createCompositeBtn = document.getElementById('createCompositeBtn');
+const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+const rotateRightBtn = document.getElementById('rotateRightBtn');
+const flipBtn = document.getElementById('flipBtn');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
@@ -19,6 +22,9 @@ progressSlider.addEventListener('input', handleSlider);
 ghostModeCheckbox.addEventListener('change', () => updateView(parseInt(progressSlider.value)));
 createGifBtn.addEventListener('click', createGif);
 createCompositeBtn.addEventListener('click', createComposite);
+rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
+rotateRightBtn.addEventListener('click', () => rotateImage(90));
+flipBtn.addEventListener('click', flipImage);
 
 imageLabel.addEventListener('input', (e) => {
     const index = parseInt(progressSlider.value);
@@ -60,7 +66,9 @@ function handleFiles(e) {
                 nameWithoutExt: nameWithoutExt,
                 date: dateObj.toLocaleDateString(),
                 monthYear: monthYear,
-                sortIndex: index
+                sortIndex: index,
+                rotation: 0,
+                flipped: false
             };
             
             images.push(imgObj);
@@ -177,11 +185,40 @@ function handleSlider(e) {
     updateView(index);
 }
 
+function rotateImage(deg) {
+    const index = parseInt(progressSlider.value);
+    if (images[index]) {
+        images[index].rotation = (images[index].rotation + deg) % 360;
+        updateView(index);
+    }
+}
+
+function flipImage() {
+    const index = parseInt(progressSlider.value);
+    if (images[index]) {
+        images[index].flipped = !images[index].flipped;
+        updateView(index);
+    }
+}
+
 function updateView(index) {
     const allImages = mainDisplay.querySelectorAll('img');
-    allImages.forEach(img => img.classList.remove('active'));
+    allImages.forEach(img => {
+        img.classList.remove('active');
+        // Reset transform for inactive images to avoid weird transitions if we want, 
+        // but keeping it might be better. 
+        // Actually, we should set the transform based on the data.
+    });
+    
     const activeImg = document.getElementById(`img-${index}`);
-    if (activeImg) activeImg.classList.add('active');
+    if (activeImg) {
+        activeImg.classList.add('active');
+        if (images[index]) {
+            const rotation = images[index].rotation || 0;
+            const scaleX = images[index].flipped ? -1 : 1;
+            activeImg.style.transform = `rotate(${rotation}deg) scaleX(${scaleX})`;
+        }
+    }
 
     const allThumbs = thumbnailsContainer.querySelectorAll('.thumbnail');
     allThumbs.forEach(thumb => thumb.classList.remove('active'));
@@ -268,8 +305,21 @@ async function processImagesForGif(gif, canvas, ctx, width, height) {
                 // Clear canvas
                 ctx.clearRect(0, 0, width, height);
                 
-                // Draw Image
-                ctx.drawImage(img, 0, 0, width, height);
+                // Draw Image with Rotation and Flip
+                ctx.save();
+                ctx.translate(width / 2, height / 2);
+                ctx.rotate((imgData.rotation || 0) * Math.PI / 180);
+                if (imgData.flipped) {
+                    ctx.scale(-1, 1);
+                }
+                
+                if (Math.abs((imgData.rotation || 0) % 180) === 90) {
+                    // If rotated 90 or 270, swap dimensions for drawing to fill the box
+                    ctx.drawImage(img, -height / 2, -width / 2, height, width);
+                } else {
+                    ctx.drawImage(img, -width / 2, -height / 2, width, height);
+                }
+                ctx.restore();
                 
                 // Draw Label Background
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -331,14 +381,28 @@ async function createComposite() {
     }));
 
     // Calculate dimensions based on the first image's height
-    const targetHeight = loadedImages[0].img.height;
+    // If first image is rotated 90/270, its visual height is its width
+    const firstItem = loadedImages[0];
+    const firstRotation = firstItem.data.rotation || 0;
+    const isFirstRotated = Math.abs(firstRotation % 180) === 90;
+    const targetHeight = isFirstRotated ? firstItem.img.width : firstItem.img.height;
+    
     let totalWidth = 0;
 
     loadedImages.forEach(item => {
-        const scaleFactor = targetHeight / item.img.height;
-        item.width = item.img.width * scaleFactor;
-        item.height = targetHeight;
-        totalWidth += item.width;
+        const rotation = item.data.rotation || 0;
+        const isRotated = Math.abs(rotation % 180) === 90;
+        
+        // Visual dimensions of the source image
+        const visualHeight = isRotated ? item.img.width : item.img.height;
+        const visualWidth = isRotated ? item.img.height : item.img.width;
+        
+        const scaleFactor = targetHeight / visualHeight;
+        
+        item.finalWidth = visualWidth * scaleFactor;
+        item.finalHeight = targetHeight;
+        
+        totalWidth += item.finalWidth;
     });
 
     // Title setup
@@ -368,7 +432,26 @@ async function createComposite() {
     // Draw images
     let currentX = 0;
     loadedImages.forEach(item => {
-        ctx.drawImage(item.img, currentX, titleAreaHeight, item.width, item.height);
+        const rotation = item.data.rotation || 0;
+        const w = item.finalWidth;
+        const h = item.finalHeight;
+        const x = currentX;
+        const y = titleAreaHeight;
+        
+        ctx.save();
+        ctx.translate(x + w/2, y + h/2);
+        ctx.rotate(rotation * Math.PI / 180);
+        if (item.data.flipped) {
+            ctx.scale(-1, 1);
+        }
+        
+        if (Math.abs(rotation % 180) === 90) {
+             // Draw swapped
+             ctx.drawImage(item.img, -h/2, -w/2, h, w);
+        } else {
+             ctx.drawImage(item.img, -w/2, -h/2, w, h);
+        }
+        ctx.restore();
         
         // Draw Label
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -382,8 +465,8 @@ async function createComposite() {
         const bgHeight = 60;
         
         // Draw label at bottom center of this image segment
-        const labelX = currentX + (item.width - bgWidth) / 2;
-        const labelY = titleAreaHeight + item.height - bgHeight - 20; 
+        const labelX = currentX + (item.finalWidth - bgWidth) / 2;
+        const labelY = titleAreaHeight + item.finalHeight - bgHeight - 20; 
 
         ctx.fillRect(labelX, labelY, bgWidth, bgHeight);
         
@@ -391,7 +474,7 @@ async function createComposite() {
         ctx.textBaseline = 'middle';
         ctx.fillText(text, labelX + padding, labelY + (bgHeight / 2));
 
-        currentX += item.width;
+        currentX += item.finalWidth;
     });
 
     // Output
