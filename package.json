@@ -1,5 +1,5 @@
 {
-  "name": "flextime",
+  "name": "fitlapse",
   "version": "1.0.0",
   "description": "A simple, private app to compare fitness progress photos",
   "main": "server.js",
