@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitness Progress Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Fitness Progress Viewer</h1>
+            <p>Select up to 5 photos to compare your progress.</p>
+        </header>
+
+        <div class="controls">
+            <input type="file" id="imageInput" multiple accept="image/*">
+            <div id="sliderContainer" class="hidden">
+                <label for="progressSlider">Scrub through timeline:</label>
+                <input type="range" id="progressSlider" min="0" max="0" value="0" step="1">
+                <div class="info-row">
+                    <div class="label-control">
+                        <label for="imageLabel">Label for GIF:</label>
+                        <input type="text" id="imageLabel" class="label-input">
+                    </div>
+                    <div class="file-name" id="fileNameDisplay"></div>
+                </div>
+                <div class="info-row">
+                    <div class="label-control">
+                        <label for="compositeTitle">Composite Title:</label>
+                        <input type="text" id="compositeTitle" class="label-input" placeholder="e.g. My Transformation">
+                    </div>
+                </div>
+                <div class="options-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
+                    </label>
+                </div>
+                <div class="actions">
+                    <button id="createGifBtn" class="btn">Create GIF</button>
+                    <button id="createCompositeBtn" class="btn">Create Side-by-Side</button>
+                </div>
+                <div id="gifResult" class="gif-result hidden"></div>
+                <div id="compositeResult" class="gif-result hidden"></div>
+            </div>
+        </div>
+
+        <div class="viewer-area">
+            <div id="mainDisplay" class="main-display">
+                <div class="placeholder">No images loaded</div>
+            </div>
+        </div>
+
+        <div id="thumbnails" class="thumbnails">
+            <!-- Thumbnails will appear here -->
+        </div>
+    </div>
+
+    <script src="gif.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
