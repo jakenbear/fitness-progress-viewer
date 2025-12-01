@@ -1,4 +1,4 @@
-# Fitness Progress Viewer
+# FlexTime 💪
 
 A simple, private web tool to load, compare, and animate your fitness progress photos.
 
@@ -11,7 +11,7 @@ A simple, private web tool to load, compare, and animate your fitness progress p
 - **Side-by-Side Composite:** Generate a single high-res image comparing all your photos side-by-side.
 
 ## How to Use
-You can use the live version here: **[Fitness Progress Viewer](https://jakenbear.github.io/fitness-progress-viewer/)**
+You can use the live version here: **[FlexTime](https://jakenbear.github.io/fitness-progress-viewer/)**
 
 ### Running Locally
 If you prefer to run it on your own machine:
