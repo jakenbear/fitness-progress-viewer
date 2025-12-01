@@ -3,8 +3,8 @@ const path = require('path');
 const app = express();
 const port = 3000;
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the root directory
+app.use(express.static(__dirname));
 
 app.listen(port, () => {
   console.log(`Fitness Progress Viewer running at http://localhost:${port}`);
