@@ -1,16 +1,22 @@
 # Fitness Progress Viewer
 
-A simple web application to load and compare fitness progress photos.
+A simple, private web tool to load, compare, and animate your fitness progress photos.
 
 ## Features
-- Load multiple images from your local device.
-- Automatically sorts images by date (last modified).
-- Scrub through the timeline using a slider.
-- Click thumbnails to jump to a specific image.
+- **100% Private:** Runs entirely in your browser. Your photos are never uploaded to any server.
+- **Timeline View:** Load multiple images and scrub through them with a slider.
+- **Ghost Mode:** Overlay your starting photo on top of current ones to easily compare changes in body composition.
+- **Drag & Drop Reordering:** Easily rearrange your photos to get the timeline just right.
+- **GIF Generator:** Create and download animated GIFs of your progress with custom labels.
+- **Side-by-Side Composite:** Generate a single high-res image comparing all your photos side-by-side.
 
-## How to Run
+## How to Use
+You can use the live version here: **[Fitness Progress Viewer](https://jakenbear.github.io/fitness-progress-viewer/)**
 
-1.  **Install Dependencies** (first time only):
+### Running Locally
+If you prefer to run it on your own machine:
+
+1.  **Install Dependencies** (optional, only for local dev):
     ```bash
     npm install
     ```
