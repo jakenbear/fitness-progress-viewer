@@ -286,6 +286,26 @@ input[type="range"]::-webkit-slider-thumb:hover {
     padding: 10px;
     background: rgba(0,0,0,0.1);
     border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.size-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.size-control select {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 .checkbox-label {

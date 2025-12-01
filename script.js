@@ -223,13 +223,24 @@ function createGif() {
     gifResult.classList.remove('hidden');
     gifResult.innerHTML = '<p>Generating GIF... Please wait.</p>';
 
+    const sizeOption = document.getElementById('gifSize').value;
+
     // Determine dimensions from the first image
     const firstImg = new Image();
     firstImg.src = images[0].src;
     
     firstImg.onload = () => {
-        const width = firstImg.width;
-        const height = firstImg.height;
+        let width = firstImg.width;
+        let height = firstImg.height;
+
+        if (sizeOption !== 'original') {
+            const targetWidth = parseInt(sizeOption);
+            if (width > targetWidth) { // Only scale down, don't scale up
+                const scaleFactor = targetWidth / width;
+                width = targetWidth;
+                height = Math.round(height * scaleFactor);
+            }
+        }
 
         const gif = new GIF({
             workers: 2,

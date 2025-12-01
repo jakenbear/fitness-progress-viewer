@@ -38,6 +38,15 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
                     </label>
+                    <div class="size-control">
+                        <label for="gifSize">Output Size:</label>
+                        <select id="gifSize" class="label-input">
+                            <option value="original">Original (Full Quality)</option>
+                            <option value="1080" selected>Social Media (1080px)</option>
+                            <option value="720">Medium (720px)</option>
+                            <option value="480">Small (480px)</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="actions">
                     <button id="createGifBtn" class="btn">Create GIF</button>
