@@ -17,6 +17,15 @@ const compositeResult = document.getElementById('compositeResult');
 
 let images = [];
 
+function sanitizeFilename(filename) {
+    // Replace special characters with underscores or remove them
+    return filename
+        .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .replace(/_+/g, '_') // Replace multiple underscores with single underscore
+        .trim();
+}
+
 imageInput.addEventListener('change', handleFiles);
 progressSlider.addEventListener('input', handleSlider);
 ghostModeCheckbox.addEventListener('change', () => updateView(parseInt(progressSlider.value)));
@@ -347,14 +356,19 @@ async function processImagesForGif(gif, canvas, ctx, width, height) {
     gif.on('finished', function(blob) {
         const url = URL.createObjectURL(blob);
         gifResult.innerHTML = '';
-        
+
         const resultImg = document.createElement('img');
         resultImg.src = url;
         gifResult.appendChild(resultImg);
-        
+
         const downloadLink = document.createElement('a');
         downloadLink.href = url;
-        downloadLink.download = 'fitness-progress.gif';
+
+        // Use title in filename if provided
+        const titleText = compositeTitleInput.value.trim();
+        const sanitizedTitle = titleText ? sanitizeFilename(titleText) : 'fitness-progress';
+        downloadLink.download = `${sanitizedTitle}.gif`;
+
         downloadLink.textContent = 'Download GIF';
         downloadLink.className = 'btn';
         downloadLink.style.display = 'block';
@@ -480,15 +494,19 @@ async function createComposite() {
     // Output
     const url = canvas.toDataURL('image/jpeg', 0.9);
     compositeResult.innerHTML = '';
-    
+
     const resultImg = document.createElement('img');
     resultImg.src = url;
     resultImg.style.maxWidth = '100%';
     compositeResult.appendChild(resultImg);
-    
+
     const downloadLink = document.createElement('a');
     downloadLink.href = url;
-    downloadLink.download = 'fitness-progress-composite.jpg';
+
+    // Use title in filename if provided
+    const sanitizedTitle = titleText ? sanitizeFilename(titleText) : 'fitness-progress-composite';
+    downloadLink.download = `${sanitizedTitle}.jpg`;
+
     downloadLink.textContent = 'Download Composite Image';
     downloadLink.className = 'btn';
     downloadLink.style.display = 'block';
