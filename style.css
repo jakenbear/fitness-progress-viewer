@@ -359,6 +359,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: var(--text-primary);
 }
 
+.composite-size-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.composite-size-control select {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
 .file-name {
     font-style: italic;
     color: var(--accent-color);

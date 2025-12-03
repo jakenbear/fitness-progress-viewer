@@ -541,8 +541,9 @@ async function createComposite() {
         if (item.finalWidth > maxWidth) maxWidth = item.finalWidth;
     });
 
-    // Get user-selected layout
+    // Get user-selected layout and size
     const selectedLayout = document.querySelector('input[name="compositeLayout"]:checked').value;
+    const scaleFactor = parseFloat(document.getElementById('compositeSize').value);
     const isVertical = selectedLayout === 'vertical';
     
     let canvasWidth, canvasHeight;
@@ -554,9 +555,13 @@ async function createComposite() {
         canvasHeight = targetHeight;
     }
 
+    // Apply scale factor
+    canvasWidth = Math.round(canvasWidth * scaleFactor);
+    canvasHeight = Math.round(canvasHeight * scaleFactor);
+
     // Title setup
     const titleText = compositeTitleInput.value.trim();
-    const titleFontSize = Math.max(80, Math.floor(targetHeight / 15));
+    const titleFontSize = Math.max(80, Math.floor(targetHeight / 15)) * scaleFactor;
     const titlePadding = titleFontSize;
     const titleAreaHeight = titleText ? (titleFontSize + (titlePadding * 2)) : 0;
 
@@ -577,6 +582,12 @@ async function createComposite() {
         ctx.textBaseline = 'middle';
         ctx.fillText(titleText, canvasWidth / 2, titleAreaHeight / 2);
     }
+
+    // Scale the final dimensions
+    loadedImages.forEach(item => {
+        item.finalWidth *= scaleFactor;
+        item.finalHeight *= scaleFactor;
+    });
 
     // Draw images
     let currentX = 0, currentY = titleAreaHeight;
@@ -604,18 +615,18 @@ async function createComposite() {
         
         // Draw Label
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.font = 'bold 40px Arial';
+        ctx.font = `bold ${40 * scaleFactor}px Arial`;
         ctx.textAlign = 'left'; // Reset alignment
         
         const text = item.data.customLabel || item.data.nameWithoutExt;
         const textMetrics = ctx.measureText(text);
-        const padding = 20;
+        const padding = 20 * scaleFactor;
         const bgWidth = textMetrics.width + (padding * 2);
-        const bgHeight = 60;
+        const bgHeight = 60 * scaleFactor;
         
         // Draw label at bottom center of this image segment
         const labelX = x + (w - bgWidth) / 2;
-        const labelY = y + h - bgHeight - 20; 
+        const labelY = y + h - bgHeight - 20 * scaleFactor; 
 
         ctx.fillRect(labelX, labelY, bgWidth, bgHeight);
         
