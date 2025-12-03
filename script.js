@@ -12,10 +12,34 @@ const createCompositeBtn = document.getElementById('createCompositeBtn');
 const rotateLeftBtn = document.getElementById('rotateLeftBtn');
 const rotateRightBtn = document.getElementById('rotateRightBtn');
 const flipBtn = document.getElementById('flipBtn');
+const resetAllBtn = document.getElementById('resetAllBtn');
+const themeToggle = document.getElementById('themeToggle');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
 let images = [];
+
+// Theme handling
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.toggle('light-theme', savedTheme === 'light');
+    updateThemeIcon();
+}
+
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light-theme');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    const isLight = document.body.classList.contains('light-theme');
+    themeToggle.textContent = isLight ? '☀️' : '🌙';
+    themeToggle.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+}
+
+themeToggle.addEventListener('click', toggleTheme);
+initTheme();
 
 imageInput.addEventListener('change', handleFiles);
 progressSlider.addEventListener('input', handleSlider);
@@ -25,6 +49,60 @@ createCompositeBtn.addEventListener('click', createComposite);
 rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
 rotateRightBtn.addEventListener('click', () => rotateImage(90));
 flipBtn.addEventListener('click', flipImage);
+resetAllBtn.addEventListener('click', resetAllTransforms);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; // Ignore if typing in inputs
+    
+    const index = parseInt(progressSlider.value);
+    switch (e.key) {
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (index > 0) {
+                progressSlider.value = index - 1;
+                updateView(index - 1);
+            }
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            if (index < images.length - 1) {
+                progressSlider.value = index + 1;
+                updateView(index + 1);
+            }
+            break;
+        case 'r':
+        case 'R':
+            e.preventDefault();
+            rotateImage(90);
+            break;
+        case 'l':
+        case 'L':
+            e.preventDefault();
+            rotateImage(-90);
+            break;
+        case 'f':
+        case 'F':
+            e.preventDefault();
+            flipImage();
+            break;
+        case 'g':
+        case 'G':
+            e.preventDefault();
+            if (!createGifBtn.disabled) createGif();
+            break;
+        case 'c':
+        case 'C':
+            e.preventDefault();
+            if (!createCompositeBtn.disabled) createComposite();
+            break;
+        case 't':
+        case 'T':
+            e.preventDefault();
+            toggleTheme();
+            break;
+    }
+});
 
 imageLabel.addEventListener('input', (e) => {
     const index = parseInt(progressSlider.value);
@@ -37,6 +115,21 @@ function handleFiles(e) {
     const files = Array.from(e.target.files);
     
     if (files.length === 0) return;
+
+    // Validate files
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const invalidFiles = files.filter(file => file.size > maxFileSize || !allowedTypes.includes(file.type));
+    
+    if (invalidFiles.length > 0) {
+        alert(`Some files are invalid:\n- Max size: 10MB\n- Allowed types: JPEG, PNG, WebP\n\nPlease check and try again.`);
+        return;
+    }
+
+    if (files.length > 6) {
+        alert('Please select up to 6 images.');
+        return;
+    }
 
     // Sort files by last modified date (oldest first)
     files.sort((a, b) => a.lastModified - b.lastModified);
@@ -51,32 +144,58 @@ function handleFiles(e) {
     compositeResult.innerHTML = '';
 
     let loadedCount = 0;
+    let failedCount = 0;
 
     files.forEach((file, index) => {
         const reader = new FileReader();
         
         reader.onload = (event) => {
-            const dateObj = new Date(file.lastModified);
-            const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-            
-            const imgObj = {
-                src: event.target.result,
-                name: file.name,
-                nameWithoutExt: nameWithoutExt,
-                date: dateObj.toLocaleDateString(),
-                monthYear: monthYear,
-                sortIndex: index,
-                rotation: 0,
-                flipped: false
-            };
-            
-            images.push(imgObj);
+            try {
+                const dateObj = new Date(file.lastModified);
+                const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                
+                const imgObj = {
+                    src: event.target.result,
+                    name: file.name,
+                    nameWithoutExt: nameWithoutExt,
+                    date: dateObj.toLocaleDateString(),
+                    monthYear: monthYear,
+                    sortIndex: index,
+                    rotation: 0,
+                    flipped: false
+                };
+                
+                images.push(imgObj);
+                loadedCount++;
+                if (loadedCount === files.length - failedCount) {
+                    images.sort((a, b) => a.sortIndex - b.sortIndex);
+                    initializeViewer();
+                }
+            } catch (error) {
+                console.error('Error processing image:', error);
+                failedCount++;
+                if (loadedCount + failedCount === files.length) {
+                    if (loadedCount > 0) {
+                        images.sort((a, b) => a.sortIndex - b.sortIndex);
+                        initializeViewer();
+                    } else {
+                        alert('Failed to load any images. Please try different files.');
+                    }
+                }
+            }
+        };
 
-            loadedCount++;
-            if (loadedCount === files.length) {
-                images.sort((a, b) => a.sortIndex - b.sortIndex);
-                initializeViewer();
+        reader.onerror = () => {
+            console.error('File read error for:', file.name);
+            failedCount++;
+            if (loadedCount + failedCount === files.length) {
+                if (loadedCount > 0) {
+                    images.sort((a, b) => a.sortIndex - b.sortIndex);
+                    initializeViewer();
+                } else {
+                    alert('Failed to load any images. Please try different files.');
+                }
             }
         };
 
@@ -201,6 +320,15 @@ function flipImage() {
     }
 }
 
+function resetAllTransforms() {
+    images.forEach(img => {
+        img.rotation = 0;
+        img.flipped = false;
+    });
+    const index = parseInt(progressSlider.value);
+    updateView(index);
+}
+
 function updateView(index) {
     const allImages = mainDisplay.querySelectorAll('img');
     allImages.forEach(img => {
@@ -258,7 +386,7 @@ function createGif() {
     if (images.length === 0) return;
 
     gifResult.classList.remove('hidden');
-    gifResult.innerHTML = '<p>Generating GIF... Please wait.</p>';
+    gifResult.innerHTML = '<p>Generating GIF... <span id="gifProgress">0%</span></p><div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>';
 
     const sizeOption = document.getElementById('gifSize').value;
 
@@ -285,6 +413,12 @@ function createGif() {
             width: width,
             height: height,
             workerScript: 'gif.worker.js'
+        });
+
+        gif.on('progress', (p) => {
+            const percent = Math.round(p * 100);
+            document.getElementById('gifProgress').textContent = `${percent}%`;
+            document.getElementById('progressFill').style.width = `${percent}%`;
         });
 
         const canvas = document.createElement('canvas');
@@ -388,6 +522,7 @@ async function createComposite() {
     const targetHeight = isFirstRotated ? firstItem.img.width : firstItem.img.height;
     
     let totalWidth = 0;
+    let maxWidth = 0;
 
     loadedImages.forEach(item => {
         const rotation = item.data.rotation || 0;
@@ -403,7 +538,19 @@ async function createComposite() {
         item.finalHeight = targetHeight;
         
         totalWidth += item.finalWidth;
+        if (item.finalWidth > maxWidth) maxWidth = item.finalWidth;
     });
+
+    // If total width exceeds a reasonable limit (e.g., 4096px to avoid canvas/browser limits), stack vertically
+    const isVertical = totalWidth > 4096;
+    let canvasWidth, canvasHeight;
+    if (isVertical) {
+        canvasWidth = maxWidth;
+        canvasHeight = targetHeight * loadedImages.length;
+    } else {
+        canvasWidth = totalWidth;
+        canvasHeight = targetHeight;
+    }
 
     // Title setup
     const titleText = compositeTitleInput.value.trim();
@@ -412,8 +559,8 @@ async function createComposite() {
     const titleAreaHeight = titleText ? (titleFontSize + (titlePadding * 2)) : 0;
 
     const canvas = document.createElement('canvas');
-    canvas.width = totalWidth;
-    canvas.height = targetHeight + titleAreaHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight + titleAreaHeight;
     const ctx = canvas.getContext('2d');
 
     // Fill background white
@@ -426,17 +573,17 @@ async function createComposite() {
         ctx.font = `bold ${titleFontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(titleText, totalWidth / 2, titleAreaHeight / 2);
+        ctx.fillText(titleText, canvasWidth / 2, titleAreaHeight / 2);
     }
 
     // Draw images
-    let currentX = 0;
+    let currentX = 0, currentY = titleAreaHeight;
     loadedImages.forEach(item => {
         const rotation = item.data.rotation || 0;
         const w = item.finalWidth;
         const h = item.finalHeight;
-        const x = currentX;
-        const y = titleAreaHeight;
+        const x = isVertical ? (canvasWidth - w) / 2 : currentX; // Center horizontally if vertical
+        const y = currentY;
         
         ctx.save();
         ctx.translate(x + w/2, y + h/2);
@@ -465,8 +612,8 @@ async function createComposite() {
         const bgHeight = 60;
         
         // Draw label at bottom center of this image segment
-        const labelX = currentX + (item.finalWidth - bgWidth) / 2;
-        const labelY = titleAreaHeight + item.finalHeight - bgHeight - 20; 
+        const labelX = x + (w - bgWidth) / 2;
+        const labelY = y + h - bgHeight - 20; 
 
         ctx.fillRect(labelX, labelY, bgWidth, bgHeight);
         
@@ -474,7 +621,11 @@ async function createComposite() {
         ctx.textBaseline = 'middle';
         ctx.fillText(text, labelX + padding, labelY + (bgHeight / 2));
 
-        currentX += item.finalWidth;
+        if (isVertical) {
+            currentY += h;
+        } else {
+            currentX += w;
+        }
     });
 
     // Output
