@@ -13,33 +13,10 @@ const rotateLeftBtn = document.getElementById('rotateLeftBtn');
 const rotateRightBtn = document.getElementById('rotateRightBtn');
 const flipBtn = document.getElementById('flipBtn');
 const resetAllBtn = document.getElementById('resetAllBtn');
-const themeToggle = document.getElementById('themeToggle');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
 let images = [];
-
-// Theme handling
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.body.classList.toggle('light-theme', savedTheme === 'light');
-    updateThemeIcon();
-}
-
-function toggleTheme() {
-    const isLight = document.body.classList.toggle('light-theme');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    updateThemeIcon();
-}
-
-function updateThemeIcon() {
-    const isLight = document.body.classList.contains('light-theme');
-    themeToggle.textContent = isLight ? '☀️' : '🌙';
-    themeToggle.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
-}
-
-themeToggle.addEventListener('click', toggleTheme);
-initTheme();
 
 imageInput.addEventListener('change', handleFiles);
 progressSlider.addEventListener('input', handleSlider);
@@ -95,11 +72,6 @@ document.addEventListener('keydown', (e) => {
         case 'C':
             e.preventDefault();
             if (!createCompositeBtn.disabled) createComposite();
-            break;
-        case 't':
-        case 'T':
-            e.preventDefault();
-            toggleTheme();
             break;
     }
 });

@@ -10,18 +10,6 @@
     --success-color: #22c55e;
 }
 
-body.light-theme {
-    --bg-color: #ffffff;
-    --card-bg: #f1f5f9;
-    --text-primary: #0f172a;
-    --text-secondary: #64748b;
-    --accent-color: #0ea5e9;
-    --accent-hover: #0284c7;
-    --control-bg: #e2e8f0;
-    --border-color: #cbd5e1;
-    --success-color: #16a34a;
-}
-
 body {
     font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
