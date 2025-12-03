@@ -14,6 +14,9 @@ const rotateRightBtn = document.getElementById('rotateRightBtn');
 const flipBtn = document.getElementById('flipBtn');
 const resetAllBtn = document.getElementById('resetAllBtn');
 const clearAllBtn = document.getElementById('clearAllBtn');
+const ghostOpacityControl = document.getElementById('ghostOpacityControl');
+const ghostOpacitySlider = document.getElementById('ghostOpacity');
+const ghostOpacityValue = document.getElementById('ghostOpacityValue');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
@@ -21,7 +24,15 @@ let images = [];
 
 imageInput.addEventListener('change', handleFiles);
 progressSlider.addEventListener('input', handleSlider);
-ghostModeCheckbox.addEventListener('change', () => updateView(parseInt(progressSlider.value)));
+ghostModeCheckbox.addEventListener('change', () => {
+    updateGhost(parseInt(progressSlider.value));
+    ghostOpacityControl.style.display = ghostModeCheckbox.checked ? 'flex' : 'none';
+});
+ghostOpacitySlider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    ghostOpacityValue.textContent = Math.round(value * 100) + '%';
+    updateGhostOpacity(value);
+});
 createGifBtn.addEventListener('click', createGif);
 createCompositeBtn.addEventListener('click', createComposite);
 rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
@@ -350,6 +361,7 @@ function updateView(index) {
     }
 
     updateGhost(index);
+    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
 }
 
 function updateGhost(currentIndex) {
@@ -371,6 +383,13 @@ function updateGhost(currentIndex) {
         if (currentIndex !== 0) {
              // It's already handled by updateView removing 'active'
         }
+    }
+}
+
+function updateGhostOpacity(opacity) {
+    const ghostImg = document.querySelector('.main-display img.ghost');
+    if (ghostImg) {
+        ghostImg.style.opacity = opacity;
     }
 }
 

@@ -168,7 +168,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .main-display img.ghost {
-    opacity: 0.3 !important;
     z-index: 10;
     filter: grayscale(100%);
 }
@@ -353,13 +352,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
     gap: 10px;
 }
 
-.composite-size-control select {
-    background: rgba(0,0,0,0.2);
-    border: 1px solid var(--border-color);
+.ghost-opacity-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     color: var(--text-primary);
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
+}
+
+.ghost-opacity-control input[type="range"] {
+    width: 100px;
 }
 
 .file-name {
