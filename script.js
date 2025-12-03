@@ -541,8 +541,10 @@ async function createComposite() {
         if (item.finalWidth > maxWidth) maxWidth = item.finalWidth;
     });
 
-    // If total width exceeds a reasonable limit (e.g., 4096px to avoid canvas/browser limits), stack vertically
-    const isVertical = totalWidth > 4096;
+    // Get user-selected layout
+    const selectedLayout = document.querySelector('input[name="compositeLayout"]:checked').value;
+    const isVertical = selectedLayout === 'vertical' || totalWidth > 8192; // Fallback to vertical if too wide
+    
     let canvasWidth, canvasHeight;
     if (isVertical) {
         canvasWidth = maxWidth;
