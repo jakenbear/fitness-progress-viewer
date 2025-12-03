@@ -543,7 +543,7 @@ async function createComposite() {
 
     // Get user-selected layout
     const selectedLayout = document.querySelector('input[name="compositeLayout"]:checked').value;
-    const isVertical = selectedLayout === 'vertical' || totalWidth > 8192; // Fallback to vertical if too wide
+    const isVertical = selectedLayout === 'vertical';
     
     let canvasWidth, canvasHeight;
     if (isVertical) {
