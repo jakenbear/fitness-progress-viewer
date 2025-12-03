@@ -13,6 +13,8 @@ A simple, private web tool to load, compare, and animate your fitness progress p
 ## How to Use
 You can use the live version here: **[FitLapse](https://jakenbear.github.io/fitness-progress-viewer/)**
 
+**Alternative deployment:** Also available on [Render](https://fitlapse.onrender.com/)
+
 ### Running Locally
 If you prefer to run it on your own machine:
 
