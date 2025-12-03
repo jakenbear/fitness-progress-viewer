@@ -370,19 +370,14 @@ function updateGhost(currentIndex) {
     
     if (!firstImg) return;
 
-    // Reset ghost class first
+    // Reset ghost class and opacity first
     firstImg.classList.remove('ghost');
+    firstImg.style.opacity = '1';
 
     // If Ghost Mode is ON and we are NOT on the first image
     if (isGhost && currentIndex !== 0) {
         firstImg.classList.add('ghost');
-    } else {
-        // If we are not in ghost mode, or we are on the first image,
-        // ensure the first image behaves normally (handled by updateView's active class logic)
-        // But we need to make sure we didn't leave it in a weird state if it was previously ghosted
-        if (currentIndex !== 0) {
-             // It's already handled by updateView removing 'active'
-        }
+        // Opacity will be set by updateGhostOpacity
     }
 }
 
