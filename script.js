@@ -12,6 +12,11 @@ const createCompositeBtn = document.getElementById('createCompositeBtn');
 const rotateLeftBtn = document.getElementById('rotateLeftBtn');
 const rotateRightBtn = document.getElementById('rotateRightBtn');
 const flipBtn = document.getElementById('flipBtn');
+const resetAllBtn = document.getElementById('resetAllBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const ghostOpacityControl = document.getElementById('ghostOpacityControl');
+const ghostOpacitySlider = document.getElementById('ghostOpacity');
+const ghostOpacityValue = document.getElementById('ghostOpacityValue');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
@@ -28,12 +33,71 @@ function sanitizeFilename(filename) {
 
 imageInput.addEventListener('change', handleFiles);
 progressSlider.addEventListener('input', handleSlider);
-ghostModeCheckbox.addEventListener('change', () => updateView(parseInt(progressSlider.value)));
+ghostModeCheckbox.addEventListener('change', () => {
+    updateGhost(parseInt(progressSlider.value));
+    ghostOpacityControl.style.display = ghostModeCheckbox.checked ? 'flex' : 'none';
+    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
+});
+ghostOpacitySlider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    ghostOpacityValue.textContent = Math.round(value * 100) + '%';
+    updateGhostOpacity(value);
+});
 createGifBtn.addEventListener('click', createGif);
 createCompositeBtn.addEventListener('click', createComposite);
 rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
 rotateRightBtn.addEventListener('click', () => rotateImage(90));
 flipBtn.addEventListener('click', flipImage);
+resetAllBtn.addEventListener('click', resetAllTransforms);
+clearAllBtn.addEventListener('click', clearAll);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; // Ignore if typing in inputs
+    
+    const index = parseInt(progressSlider.value);
+    switch (e.key) {
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (index > 0) {
+                progressSlider.value = index - 1;
+                updateView(index - 1);
+            }
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            if (index < images.length - 1) {
+                progressSlider.value = index + 1;
+                updateView(index + 1);
+            }
+            break;
+        case 'r':
+        case 'R':
+            e.preventDefault();
+            rotateImage(90);
+            break;
+        case 'l':
+        case 'L':
+            e.preventDefault();
+            rotateImage(-90);
+            break;
+        case 'f':
+        case 'F':
+            e.preventDefault();
+            flipImage();
+            break;
+        case 'g':
+        case 'G':
+            e.preventDefault();
+            if (!createGifBtn.disabled) createGif();
+            break;
+        case 'c':
+        case 'C':
+            e.preventDefault();
+            if (!createCompositeBtn.disabled) createComposite();
+            break;
+    }
+});
 
 imageLabel.addEventListener('input', (e) => {
     const index = parseInt(progressSlider.value);
@@ -46,6 +110,21 @@ function handleFiles(e) {
     const files = Array.from(e.target.files);
     
     if (files.length === 0) return;
+
+    // Validate files
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const invalidFiles = files.filter(file => file.size > maxFileSize || !allowedTypes.includes(file.type));
+    
+    if (invalidFiles.length > 0) {
+        alert(`Some files are invalid:\n- Max size: 10MB\n- Allowed types: JPEG, PNG, WebP\n\nPlease check and try again.`);
+        return;
+    }
+
+    if (files.length > 6) {
+        alert('Please select up to 6 images.');
+        return;
+    }
 
     // Sort files by last modified date (oldest first)
     files.sort((a, b) => a.lastModified - b.lastModified);
@@ -60,32 +139,58 @@ function handleFiles(e) {
     compositeResult.innerHTML = '';
 
     let loadedCount = 0;
+    let failedCount = 0;
 
     files.forEach((file, index) => {
         const reader = new FileReader();
         
         reader.onload = (event) => {
-            const dateObj = new Date(file.lastModified);
-            const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-            
-            const imgObj = {
-                src: event.target.result,
-                name: file.name,
-                nameWithoutExt: nameWithoutExt,
-                date: dateObj.toLocaleDateString(),
-                monthYear: monthYear,
-                sortIndex: index,
-                rotation: 0,
-                flipped: false
-            };
-            
-            images.push(imgObj);
+            try {
+                const dateObj = new Date(file.lastModified);
+                const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                
+                const imgObj = {
+                    src: event.target.result,
+                    name: file.name,
+                    nameWithoutExt: nameWithoutExt,
+                    date: dateObj.toLocaleDateString(),
+                    monthYear: monthYear,
+                    sortIndex: index,
+                    rotation: 0,
+                    flipped: false
+                };
+                
+                images.push(imgObj);
+                loadedCount++;
+                if (loadedCount === files.length - failedCount) {
+                    images.sort((a, b) => a.sortIndex - b.sortIndex);
+                    initializeViewer();
+                }
+            } catch (error) {
+                console.error('Error processing image:', error);
+                failedCount++;
+                if (loadedCount + failedCount === files.length) {
+                    if (loadedCount > 0) {
+                        images.sort((a, b) => a.sortIndex - b.sortIndex);
+                        initializeViewer();
+                    } else {
+                        alert('Failed to load any images. Please try different files.');
+                    }
+                }
+            }
+        };
 
-            loadedCount++;
-            if (loadedCount === files.length) {
-                images.sort((a, b) => a.sortIndex - b.sortIndex);
-                initializeViewer();
+        reader.onerror = () => {
+            console.error('File read error for:', file.name);
+            failedCount++;
+            if (loadedCount + failedCount === files.length) {
+                if (loadedCount > 0) {
+                    images.sort((a, b) => a.sortIndex - b.sortIndex);
+                    initializeViewer();
+                } else {
+                    alert('Failed to load any images. Please try different files.');
+                }
             }
         };
 
@@ -210,6 +315,33 @@ function flipImage() {
     }
 }
 
+function resetAllTransforms() {
+    images.forEach(img => {
+        img.rotation = 0;
+        img.flipped = false;
+    });
+    const index = parseInt(progressSlider.value);
+    updateView(index);
+}
+
+function clearAll() {
+    if (confirm('Are you sure you want to clear all images and reset the app?')) {
+        images = [];
+        mainDisplay.innerHTML = '<div class="placeholder">No images loaded</div>';
+        thumbnailsContainer.innerHTML = '';
+        sliderContainer.classList.add('hidden');
+        gifResult.classList.add('hidden');
+        gifResult.innerHTML = '';
+        compositeResult.classList.add('hidden');
+        compositeResult.innerHTML = '';
+        imageInput.value = '';
+        compositeTitleInput.value = '';
+        fileNameDisplay.textContent = '';
+        progressSlider.value = 0;
+        ghostModeCheckbox.checked = false;
+    }
+}
+
 function updateView(index) {
     const allImages = mainDisplay.querySelectorAll('img');
     allImages.forEach(img => {
@@ -239,6 +371,7 @@ function updateView(index) {
     }
 
     updateGhost(index);
+    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
 }
 
 function updateGhost(currentIndex) {
@@ -247,19 +380,21 @@ function updateGhost(currentIndex) {
     
     if (!firstImg) return;
 
-    // Reset ghost class first
+    // Reset ghost class and opacity first
     firstImg.classList.remove('ghost');
+    firstImg.style.opacity = '1';
 
     // If Ghost Mode is ON and we are NOT on the first image
     if (isGhost && currentIndex !== 0) {
         firstImg.classList.add('ghost');
-    } else {
-        // If we are not in ghost mode, or we are on the first image,
-        // ensure the first image behaves normally (handled by updateView's active class logic)
-        // But we need to make sure we didn't leave it in a weird state if it was previously ghosted
-        if (currentIndex !== 0) {
-             // It's already handled by updateView removing 'active'
-        }
+        // Opacity will be set by updateGhostOpacity
+    }
+}
+
+function updateGhostOpacity(opacity) {
+    const ghostImg = document.querySelector('.main-display img.ghost');
+    if (ghostImg) {
+        ghostImg.style.opacity = opacity;
     }
 }
 
@@ -267,7 +402,7 @@ function createGif() {
     if (images.length === 0) return;
 
     gifResult.classList.remove('hidden');
-    gifResult.innerHTML = '<p>Generating GIF... Please wait.</p>';
+    gifResult.innerHTML = '<p>Generating GIF... <span id="gifProgress">0%</span></p><div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>';
 
     const sizeOption = document.getElementById('gifSize').value;
 
@@ -294,6 +429,12 @@ function createGif() {
             width: width,
             height: height,
             workerScript: 'gif.worker.js'
+        });
+
+        gif.on('progress', (p) => {
+            const percent = Math.round(p * 100);
+            document.getElementById('gifProgress').textContent = `${percent}%`;
+            document.getElementById('progressFill').style.width = `${percent}%`;
         });
 
         const canvas = document.createElement('canvas');
@@ -383,14 +524,19 @@ async function createComposite() {
     if (images.length === 0) return;
 
     compositeResult.classList.remove('hidden');
-    compositeResult.innerHTML = '<p>Generating Composite... Please wait.</p>';
+    compositeResult.innerHTML = '<p>Generating Composite... <span id="compositeProgress">0%</span></p><div class="progress-bar"><div id="compositeProgressFill" class="progress-fill"></div></div>';
 
     // Load all images first to get dimensions
-    const loadedImages = await Promise.all(images.map(imgData => {
+    const loadedImages = await Promise.all(images.map((imgData, index) => {
         return new Promise((resolve) => {
             const img = new Image();
             img.src = imgData.src;
-            img.onload = () => resolve({ img, data: imgData });
+            img.onload = () => {
+                const percent = Math.round(((index + 1) / images.length) * 50); // First 50% for loading
+                document.getElementById('compositeProgress').textContent = `${percent}%`;
+                document.getElementById('compositeProgressFill').style.width = `${percent}%`;
+                resolve({ img, data: imgData });
+            };
         });
     }));
 
@@ -402,6 +548,7 @@ async function createComposite() {
     const targetHeight = isFirstRotated ? firstItem.img.width : firstItem.img.height;
     
     let totalWidth = 0;
+    let maxWidth = 0;
 
     loadedImages.forEach(item => {
         const rotation = item.data.rotation || 0;
@@ -417,17 +564,36 @@ async function createComposite() {
         item.finalHeight = targetHeight;
         
         totalWidth += item.finalWidth;
+        if (item.finalWidth > maxWidth) maxWidth = item.finalWidth;
     });
+
+    // Get user-selected layout and size
+    const selectedLayout = document.querySelector('input[name="compositeLayout"]:checked').value;
+    const scaleFactor = parseFloat(document.getElementById('compositeSize').value);
+    const isVertical = selectedLayout === 'vertical';
+    
+    let canvasWidth, canvasHeight;
+    if (isVertical) {
+        canvasWidth = maxWidth;
+        canvasHeight = targetHeight * loadedImages.length;
+    } else {
+        canvasWidth = totalWidth;
+        canvasHeight = targetHeight;
+    }
+
+    // Apply scale factor
+    canvasWidth = Math.round(canvasWidth * scaleFactor);
+    canvasHeight = Math.round(canvasHeight * scaleFactor);
 
     // Title setup
     const titleText = compositeTitleInput.value.trim();
-    const titleFontSize = Math.max(80, Math.floor(targetHeight / 15));
+    const titleFontSize = Math.max(80, Math.floor(targetHeight / 15)) * scaleFactor;
     const titlePadding = titleFontSize;
     const titleAreaHeight = titleText ? (titleFontSize + (titlePadding * 2)) : 0;
 
     const canvas = document.createElement('canvas');
-    canvas.width = totalWidth;
-    canvas.height = targetHeight + titleAreaHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight + titleAreaHeight;
     const ctx = canvas.getContext('2d');
 
     // Fill background white
@@ -440,17 +606,23 @@ async function createComposite() {
         ctx.font = `bold ${titleFontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(titleText, totalWidth / 2, titleAreaHeight / 2);
+        ctx.fillText(titleText, canvasWidth / 2, titleAreaHeight / 2);
     }
 
-    // Draw images
-    let currentX = 0;
+    // Scale the final dimensions
     loadedImages.forEach(item => {
+        item.finalWidth *= scaleFactor;
+        item.finalHeight *= scaleFactor;
+    });
+
+    // Draw images
+    let currentX = 0, currentY = titleAreaHeight;
+    loadedImages.forEach((item, index) => {
         const rotation = item.data.rotation || 0;
         const w = item.finalWidth;
         const h = item.finalHeight;
-        const x = currentX;
-        const y = titleAreaHeight;
+        const x = isVertical ? (canvasWidth - w) / 2 : currentX; // Center horizontally if vertical
+        const y = currentY;
         
         ctx.save();
         ctx.translate(x + w/2, y + h/2);
@@ -469,18 +641,18 @@ async function createComposite() {
         
         // Draw Label
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.font = 'bold 40px Arial';
+        ctx.font = `bold ${40 * scaleFactor}px Arial`;
         ctx.textAlign = 'left'; // Reset alignment
         
         const text = item.data.customLabel || item.data.nameWithoutExt;
         const textMetrics = ctx.measureText(text);
-        const padding = 20;
+        const padding = 20 * scaleFactor;
         const bgWidth = textMetrics.width + (padding * 2);
-        const bgHeight = 60;
+        const bgHeight = 60 * scaleFactor;
         
         // Draw label at bottom center of this image segment
-        const labelX = currentX + (item.finalWidth - bgWidth) / 2;
-        const labelY = titleAreaHeight + item.finalHeight - bgHeight - 20; 
+        const labelX = x + (w - bgWidth) / 2;
+        const labelY = y + h - bgHeight - 20 * scaleFactor; 
 
         ctx.fillRect(labelX, labelY, bgWidth, bgHeight);
         
@@ -488,7 +660,15 @@ async function createComposite() {
         ctx.textBaseline = 'middle';
         ctx.fillText(text, labelX + padding, labelY + (bgHeight / 2));
 
-        currentX += item.finalWidth;
+        const percent = Math.round(50 + ((index + 1) / loadedImages.length) * 50); // 50-100% for drawing
+        document.getElementById('compositeProgress').textContent = `${percent}%`;
+        document.getElementById('compositeProgressFill').style.width = `${percent}%`;
+
+        if (isVertical) {
+            currentY += h;
+        } else {
+            currentX += w;
+        }
     });
 
     // Output
