@@ -13,6 +13,7 @@ const rotateLeftBtn = document.getElementById('rotateLeftBtn');
 const rotateRightBtn = document.getElementById('rotateRightBtn');
 const flipBtn = document.getElementById('flipBtn');
 const resetAllBtn = document.getElementById('resetAllBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
 
@@ -27,6 +28,7 @@ rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
 rotateRightBtn.addEventListener('click', () => rotateImage(90));
 flipBtn.addEventListener('click', flipImage);
 resetAllBtn.addEventListener('click', resetAllTransforms);
+clearAllBtn.addEventListener('click', clearAll);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
@@ -301,6 +303,24 @@ function resetAllTransforms() {
     updateView(index);
 }
 
+function clearAll() {
+    if (confirm('Are you sure you want to clear all images and reset the app?')) {
+        images = [];
+        mainDisplay.innerHTML = '<div class="placeholder">No images loaded</div>';
+        thumbnailsContainer.innerHTML = '';
+        sliderContainer.classList.add('hidden');
+        gifResult.classList.add('hidden');
+        gifResult.innerHTML = '';
+        compositeResult.classList.add('hidden');
+        compositeResult.innerHTML = '';
+        imageInput.value = '';
+        compositeTitleInput.value = '';
+        fileNameDisplay.textContent = '';
+        progressSlider.value = 0;
+        ghostModeCheckbox.checked = false;
+    }
+}
+
 function updateView(index) {
     const allImages = mainDisplay.querySelectorAll('img');
     allImages.forEach(img => {
@@ -475,14 +495,19 @@ async function createComposite() {
     if (images.length === 0) return;
 
     compositeResult.classList.remove('hidden');
-    compositeResult.innerHTML = '<p>Generating Composite... Please wait.</p>';
+    compositeResult.innerHTML = '<p>Generating Composite... <span id="compositeProgress">0%</span></p><div class="progress-bar"><div id="compositeProgressFill" class="progress-fill"></div></div>';
 
     // Load all images first to get dimensions
-    const loadedImages = await Promise.all(images.map(imgData => {
+    const loadedImages = await Promise.all(images.map((imgData, index) => {
         return new Promise((resolve) => {
             const img = new Image();
             img.src = imgData.src;
-            img.onload = () => resolve({ img, data: imgData });
+            img.onload = () => {
+                const percent = Math.round(((index + 1) / images.length) * 50); // First 50% for loading
+                document.getElementById('compositeProgress').textContent = `${percent}%`;
+                document.getElementById('compositeProgressFill').style.width = `${percent}%`;
+                resolve({ img, data: imgData });
+            };
         });
     }));
 
@@ -563,7 +588,7 @@ async function createComposite() {
 
     // Draw images
     let currentX = 0, currentY = titleAreaHeight;
-    loadedImages.forEach(item => {
+    loadedImages.forEach((item, index) => {
         const rotation = item.data.rotation || 0;
         const w = item.finalWidth;
         const h = item.finalHeight;
@@ -605,6 +630,10 @@ async function createComposite() {
         ctx.fillStyle = 'white';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, labelX + padding, labelY + (bgHeight / 2));
+
+        const percent = Math.round(50 + ((index + 1) / loadedImages.length) * 50); // 50-100% for drawing
+        document.getElementById('compositeProgress').textContent = `${percent}%`;
+        document.getElementById('compositeProgressFill').style.width = `${percent}%`;
 
         if (isVertical) {
             currentY += h;
