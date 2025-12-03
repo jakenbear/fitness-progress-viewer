@@ -32,6 +32,9 @@
         <div id="sliderContainer" class="hidden">
             <label for="progressSlider">Scrub through timeline:</label>
             <input type="range" id="progressSlider" min="0" max="0" value="0" step="1">
+            <div id="thumbnails" class="thumbnails">
+                <!-- Thumbnails will appear here -->
+            </div>
             <div class="info-row">
                 <div class="label-control">
                     <label for="imageLabel">Label for GIF:</label>
@@ -56,7 +59,7 @@
                     <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
                 </label>
                 <div class="size-control">
-                    <label for="gifSize">Output Size:</label>
+                    <label for="gifSize">GIF Output Size:</label>
                     <select id="gifSize" class="label-input">
                         <option value="original">Original (Full Quality)</option>
                         <option value="1080" selected>Social Media (1080px)</option>
@@ -91,8 +94,6 @@
             <div id="compositeResult" class="gif-result hidden"></div>
         </div>
 
-        <div id="thumbnails" class="thumbnails">
-            <!-- Thumbnails will appear here -->
         </div>
     </div>
 
