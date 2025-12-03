@@ -27,6 +27,7 @@ progressSlider.addEventListener('input', handleSlider);
 ghostModeCheckbox.addEventListener('change', () => {
     updateGhost(parseInt(progressSlider.value));
     ghostOpacityControl.style.display = ghostModeCheckbox.checked ? 'flex' : 'none';
+    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
 });
 ghostOpacitySlider.addEventListener('input', (e) => {
     const value = parseFloat(e.target.value);
