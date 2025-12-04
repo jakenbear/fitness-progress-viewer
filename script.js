@@ -113,11 +113,11 @@ function handleFiles(e) {
 
     // Validate files
     const maxFileSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
     const invalidFiles = files.filter(file => file.size > maxFileSize || !allowedTypes.includes(file.type));
     
     if (invalidFiles.length > 0) {
-        alert(`Some files are invalid:\n- Max size: 10MB\n- Allowed types: JPEG, PNG, WebP\n\nPlease check and try again.`);
+        alert(`Some files are invalid:\n- Max size: 10MB\n- Allowed types: JPEG, PNG, WebP, HEIC, HEIF\n\nPlease check and try again.`);
         return;
     }
 
