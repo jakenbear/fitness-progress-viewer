@@ -398,6 +398,46 @@ function updateGhostOpacity(opacity) {
     }
 }
 
+function isQuarterTurn(rotation) {
+    return Math.abs((rotation || 0) % 180) === 90;
+}
+
+/** On-screen size of an image after rotation (90/270 swaps axes). */
+function getVisualSize(img, rotation) {
+    if (isQuarterTurn(rotation)) {
+        return { width: img.height, height: img.width };
+    }
+    return { width: img.width, height: img.height };
+}
+
+/**
+ * Draw an image into a destination box without distorting aspect ratio.
+ * mode "contain" letterboxes; "cover" fills and crops overflow.
+ */
+function drawImageFitted(ctx, img, rotation, flipped, dx, dy, destW, destH, mode = 'contain') {
+    const { width: visualW, height: visualH } = getVisualSize(img, rotation);
+    const scale = mode === 'cover'
+        ? Math.max(destW / visualW, destH / visualH)
+        : Math.min(destW / visualW, destH / visualH);
+    const drawW = visualW * scale;
+    const drawH = visualH * scale;
+
+    ctx.save();
+    ctx.translate(dx + destW / 2, dy + destH / 2);
+    ctx.rotate((rotation || 0) * Math.PI / 180);
+    if (flipped) {
+        ctx.scale(-1, 1);
+    }
+
+    // After a 90/270 rotation the bitmap’s axes are swapped relative to the visual box
+    if (isQuarterTurn(rotation)) {
+        ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
+    } else {
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    }
+    ctx.restore();
+}
+
 function createGif() {
     if (images.length === 0) return;
 
@@ -406,13 +446,14 @@ function createGif() {
 
     const sizeOption = document.getElementById('gifSize').value;
 
-    // Determine dimensions from the first image
+    // Determine dimensions from the first image (respecting its rotation)
     const firstImg = new Image();
     firstImg.src = images[0].src;
     
     firstImg.onload = () => {
-        let width = firstImg.width;
-        let height = firstImg.height;
+        const visual = getVisualSize(firstImg, images[0].rotation);
+        let width = visual.width;
+        let height = visual.height;
 
         if (sizeOption !== 'original') {
             const targetWidth = parseInt(sizeOption);
@@ -452,24 +493,21 @@ async function processImagesForGif(gif, canvas, ctx, width, height) {
             const img = new Image();
             img.src = imgData.src;
             img.onload = () => {
-                // Clear canvas
-                ctx.clearRect(0, 0, width, height);
-                
-                // Draw Image with Rotation and Flip
-                ctx.save();
-                ctx.translate(width / 2, height / 2);
-                ctx.rotate((imgData.rotation || 0) * Math.PI / 180);
-                if (imgData.flipped) {
-                    ctx.scale(-1, 1);
-                }
-                
-                if (Math.abs((imgData.rotation || 0) % 180) === 90) {
-                    // If rotated 90 or 270, swap dimensions for drawing to fill the box
-                    ctx.drawImage(img, -height / 2, -width / 2, height, width);
-                } else {
-                    ctx.drawImage(img, -width / 2, -height / 2, width, height);
-                }
-                ctx.restore();
+                // Solid background so letterboxing is consistent across frames
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, width, height);
+
+                drawImageFitted(
+                    ctx,
+                    img,
+                    imgData.rotation || 0,
+                    imgData.flipped,
+                    0,
+                    0,
+                    width,
+                    height,
+                    'contain'
+                );
                 
                 // Draw Label Background
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -540,27 +578,18 @@ async function createComposite() {
         });
     }));
 
-    // Calculate dimensions based on the first image's height
-    // If first image is rotated 90/270, its visual height is its width
+    // Match all images to the first image's visual height, preserving each photo's aspect ratio
     const firstItem = loadedImages[0];
-    const firstRotation = firstItem.data.rotation || 0;
-    const isFirstRotated = Math.abs(firstRotation % 180) === 90;
-    const targetHeight = isFirstRotated ? firstItem.img.width : firstItem.img.height;
+    const targetHeight = getVisualSize(firstItem.img, firstItem.data.rotation).height;
     
     let totalWidth = 0;
     let maxWidth = 0;
 
     loadedImages.forEach(item => {
-        const rotation = item.data.rotation || 0;
-        const isRotated = Math.abs(rotation % 180) === 90;
+        const visual = getVisualSize(item.img, item.data.rotation);
+        const fitScale = targetHeight / visual.height;
         
-        // Visual dimensions of the source image
-        const visualHeight = isRotated ? item.img.width : item.img.height;
-        const visualWidth = isRotated ? item.img.height : item.img.width;
-        
-        const scaleFactor = targetHeight / visualHeight;
-        
-        item.finalWidth = visualWidth * scaleFactor;
+        item.finalWidth = visual.width * fitScale;
         item.finalHeight = targetHeight;
         
         totalWidth += item.finalWidth;
@@ -618,26 +647,22 @@ async function createComposite() {
     // Draw images
     let currentX = 0, currentY = titleAreaHeight;
     loadedImages.forEach((item, index) => {
-        const rotation = item.data.rotation || 0;
         const w = item.finalWidth;
         const h = item.finalHeight;
         const x = isVertical ? (canvasWidth - w) / 2 : currentX; // Center horizontally if vertical
         const y = currentY;
-        
-        ctx.save();
-        ctx.translate(x + w/2, y + h/2);
-        ctx.rotate(rotation * Math.PI / 180);
-        if (item.data.flipped) {
-            ctx.scale(-1, 1);
-        }
-        
-        if (Math.abs(rotation % 180) === 90) {
-             // Draw swapped
-             ctx.drawImage(item.img, -h/2, -w/2, h, w);
-        } else {
-             ctx.drawImage(item.img, -w/2, -h/2, w, h);
-        }
-        ctx.restore();
+
+        drawImageFitted(
+            ctx,
+            item.img,
+            item.data.rotation || 0,
+            item.data.flipped,
+            x,
+            y,
+            w,
+            h,
+            'contain'
+        );
         
         // Draw Label
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
