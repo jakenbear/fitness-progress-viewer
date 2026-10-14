@@ -2,114 +2,188 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#6c5ce7">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#07090f">
+    <meta name="description" content="Private fitness progress photos. Compare up to 6 pictures, then export a themed GIF or composite. Photos stay on your device.">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FitLapse">
     <title>FitLapse - Private Progress Tracker</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%236c5ce7' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>💎</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%2307090f' width='100' height='100' rx='22'/%3E%3Cpolygon points='50,18 82,50 50,82 18,50' fill='%233aa0ff'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%2307090f' width='100' height='100' rx='22'/%3E%3Cpolygon points='50,18 82,50 50,82 18,50' fill='%233aa0ff'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>FitLapse 💎</h1>
-            <p>Select up to 6 photos to compare your progress.</p>
-            <div class="privacy-badge">
-                🔒 100% Private. Photos stay on your device.
-            </div>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <main class="container">
+        <header class="hero">
+            <h1>FitLapse</h1>
+            <p class="subtitle">Progress Tracker</p>
+            <p class="lede">Select up to 6 photos to compare your progress.</p>
+            <p class="privacy-badge">100% private. Photos stay on your device.</p>
         </header>
 
         <div class="controls">
-            <input type="file" id="imageInput" multiple accept="image/*">
+            <label class="dropzone" id="dropzone">
+                <input type="file" id="imageInput" multiple accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp,.gif,.avif">
+                <span class="dropzone-mark" aria-hidden="true"></span>
+                <span class="dropzone-copy">
+                    <span class="dropzone-title" id="dropzoneTitle">Choose photos</span>
+                    <span class="dropzone-hint" id="dropzoneHint">or drop them here · up to 6 · JPEG, PNG, WebP</span>
+                </span>
+            </label>
+            <p id="notice" class="notice hidden" role="status"></p>
         </div>
 
-        <div class="viewer-area">
-            <div id="mainDisplay" class="main-display">
-                <div class="placeholder">No images loaded</div>
+        <div class="viewer-area" id="viewer">
+            <div id="mainDisplay" class="main-display"></div>
+            <button type="button" class="placeholder" id="emptyState">
+                <span class="placeholder-mark" aria-hidden="true"></span>
+                <span class="placeholder-title" id="emptyTitle">No photos yet</span>
+                <span class="placeholder-hint" id="emptyHint">Your timeline shows up here. Oldest photo first.</span>
+            </button>
+            <div class="viewer-chip hidden" id="viewerChip">
+                <span id="viewerIndex"></span>
+                <span class="viewer-dot" aria-hidden="true"></span>
+                <span id="viewerWhen"></span>
             </div>
         </div>
 
         <div id="sliderContainer" class="hidden">
-            <label for="progressSlider">Scrub through timeline:</label>
-            <div class="file-name" id="fileNameDisplay"></div>
-            <input type="range" id="progressSlider" min="0" max="0" value="0" step="1">
-            <div id="thumbnails" class="thumbnails">
-                <!-- Thumbnails will appear here -->
-            </div>
-            <div class="info-row">
-                <div class="label-control">
-                    <label for="imageLabel">Label for GIF:</label>
-                    <input type="text" id="imageLabel" class="label-input">
+            <section class="panel" aria-labelledby="timelineLabel">
+                <div class="panel-head">
+                    <h2 class="filter-label" id="timelineLabel">Timeline</h2>
+                    <p class="count-chip" id="countChip"></p>
                 </div>
-                <div class="rotate-controls">
-                    <button id="rotateLeftBtn" class="btn-icon" title="Rotate Left">↺</button>
-                    <button id="rotateRightBtn" class="btn-icon" title="Rotate Right">↻</button>
-                    <button id="flipBtn" class="btn-icon" title="Flip Horizontally">⇄</button>
-                    <button id="resetAllBtn" class="btn-icon" title="Reset all rotations and flips">🔄</button>
+                <p class="file-name" id="fileNameDisplay"></p>
+                <input type="range" id="progressSlider" min="0" max="0" value="0" step="1" aria-label="Scrub through timeline">
+                <div id="thumbnails" class="thumbnails" role="listbox" aria-label="Photos"></div>
+                <p class="hint">Drag to reorder. On a phone, press and hold, then drag. Arrow keys step through the photos.</p>
+            </section>
+
+            <section class="panel">
+                <div class="field">
+                    <label class="field-label" for="imageLabel">Caption</label>
+                    <input type="text" id="imageLabel" class="text-input" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Label on the export">
                 </div>
-            </div>
-            <div class="info-row">
-                <div class="label-control">
-                    <label for="compositeTitle">Composite Title:</label>
-                    <input type="text" id="compositeTitle" class="label-input" placeholder="e.g. My Transformation">
+                <div class="field">
+                    <span class="field-label" id="adjustLabel">Adjust</span>
+                    <div class="rotate-controls" role="group" aria-labelledby="adjustLabel">
+                        <button id="rotateLeftBtn" class="btn-icon" type="button" title="Rotate left (L)" aria-label="Rotate left">↺</button>
+                        <button id="rotateRightBtn" class="btn-icon" type="button" title="Rotate right (R)" aria-label="Rotate right">↻</button>
+                        <button id="flipBtn" class="btn-icon" type="button" title="Flip horizontally (F)" aria-label="Flip horizontally">⇄</button>
+                        <button id="resetAllBtn" class="btn-icon" type="button" title="Reset all rotations and flips" aria-label="Reset all rotations and flips">⟲</button>
+                    </div>
                 </div>
-            </div>
-            <div class="options-row">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="ghostMode"> Ghost Overlay (Compare to First)
-                </label>
-                <div class="ghost-opacity-control" id="ghostOpacityControl" style="display: none;">
-                    <label for="ghostOpacity">Ghost Opacity:</label>
-                    <input type="range" id="ghostOpacity" min="0.1" max="0.75" step="0.05" value="0.3">
-                    <span id="ghostOpacityValue">30%</span>
+                <p class="hint">Printed on the GIF and the composite. Shortcuts: R rotate, L left, F flip.</p>
+            </section>
+
+            <section class="panel" aria-labelledby="exportLabel">
+                <h2 class="filter-label" id="exportLabel">Export</h2>
+                <div class="field">
+                    <label class="field-label" for="compositeTitle">Composite title</label>
+                    <input type="text" id="compositeTitle" class="text-input" maxlength="80" autocomplete="off" placeholder="My transformation">
                 </div>
-                <div class="size-control">
-                    <label for="gifSize">GIF Output Size:</label>
-                    <select id="gifSize" class="label-input">
+                <div class="field">
+                    <label class="field-label" for="ghostMode">Ghost overlay</label>
+                    <label class="switch">
+                        <input type="checkbox" id="ghostMode">
+                        <span>Compare to first photo</span>
+                    </label>
+                </div>
+                <div class="field hidden" id="ghostOpacityControl">
+                    <label class="field-label" for="ghostOpacity">Ghost opacity</label>
+                    <div class="inline-slider">
+                        <input type="range" id="ghostOpacity" min="0.1" max="0.75" step="0.05" value="0.3">
+                        <span id="ghostOpacityValue">30%</span>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="gifSize">GIF size</label>
+                    <select id="gifSize" class="text-input">
                         <option value="original">Original (Full Quality)</option>
                         <option value="1080">Social Media (1080px)</option>
                         <option value="720">Medium (720px)</option>
                         <option value="480" selected>Small (480px)</option>
                     </select>
                 </div>
-                <div class="layout-control">
-                    <label>Composite Layout:</label>
-                    <label class="radio-label">
-                        <input type="radio" name="compositeLayout" value="horizontal" checked> Horizontal
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="compositeLayout" value="vertical"> Vertical
-                    </label>
+                <div class="field">
+                    <span class="field-label" id="layoutLabel">Layout</span>
+                    <div class="choice-row" role="radiogroup" aria-labelledby="layoutLabel">
+                        <label class="choice">
+                            <input type="radio" name="compositeLayout" value="horizontal" checked>
+                            <span>Horizontal</span>
+                        </label>
+                        <label class="choice">
+                            <input type="radio" name="compositeLayout" value="vertical">
+                            <span>Vertical</span>
+                        </label>
+                    </div>
                 </div>
-                <div class="composite-size-control">
-                    <label for="compositeSize">Composite Size:</label>
-                    <select id="compositeSize" class="label-input">
+                <div class="field">
+                    <label class="field-label" for="compositeSize">Composite size</label>
+                    <select id="compositeSize" class="text-input">
                         <option value="1.0">Full Size (100%)</option>
                         <option value="0.75" selected>75%</option>
                         <option value="0.5">50%</option>
                         <option value="0.25">25%</option>
                     </select>
                 </div>
-            </div>
+                <div class="field field-theme">
+                    <span class="field-label" id="themeLabel">Theme</span>
+                    <div class="choice-row theme-row" role="radiogroup" aria-labelledby="themeLabel">
+                        <label class="choice" title="Dark frame, blue accent, date and count">
+                            <input type="radio" name="exportTheme" value="signal" checked>
+                            <span><i class="theme-swatch signal" aria-hidden="true"></i>Signal</span>
+                        </label>
+                        <label class="choice" title="Light print with a caption under the photo">
+                            <input type="radio" name="exportTheme" value="studio">
+                            <span><i class="theme-swatch studio" aria-hidden="true"></i>Studio</span>
+                        </label>
+                        <label class="choice" title="DDP Yoga colors, diamond mark, and level bar">
+                            <input type="radio" name="exportTheme" value="diamond">
+                            <span><i class="theme-swatch diamond" aria-hidden="true"></i>Diamond</span>
+                        </label>
+                        <label class="choice" title="Cream photo print with a camera date stamp">
+                            <input type="radio" name="exportTheme" value="stamp">
+                            <span><i class="theme-swatch stamp" aria-hidden="true"></i>Stamp</span>
+                        </label>
+                    </div>
+                </div>
+                <p class="hint">The theme frames both the GIF and the composite: color, type, dates, and progress.</p>
+            </section>
+
             <div class="actions">
-                <button id="createGifBtn" class="btn" title="Create an animated GIF from your images (Shortcut: G)">Create GIF</button>
-                <button id="createCompositeBtn" class="btn" title="Create a composite image from your images (Shortcut: C)">Create Composite</button>
-                <button id="clearAllBtn" class="btn" title="Clear all images and reset the app">Clear All</button>
+                <button id="createGifBtn" class="btn btn-primary" type="button" title="Create an animated GIF from your photos (Shortcut: G)">Create GIF</button>
+                <button id="createCompositeBtn" class="btn btn-primary" type="button" title="Create a composite image from your photos (Shortcut: C)">Create Composite</button>
+                <button id="clearAllBtn" class="btn btn-quiet" type="button">Clear All</button>
             </div>
-            <div id="compositeResult" class="gif-result hidden"></div>
-            <div id="gifResult" class="gif-result hidden"></div>
+
+            <div id="compositeResult" class="gif-result hidden" aria-live="polite"></div>
+            <div id="gifResult" class="gif-result hidden" aria-live="polite"></div>
         </div>
 
-        </div>
-    </div>
-
-    <footer class="app-footer">
-        <a href="https://ddpy-spinner.onrender.com/" target="_blank">🎰 Need a workout? Try the DDPY Spinner</a>
-    </footer>
+        <footer>
+            <div class="how-to">
+                <p class="how-to-title">How to use</p>
+                <ol>
+                    <li>Choose up to 6 photos</li>
+                    <li>Scrub, reorder, and adjust</li>
+                    <li>Pick an export theme</li>
+                    <li>Create a GIF or a composite</li>
+                </ol>
+            </div>
+            <a class="spinner-link" href="https://ddpy-spinner.onrender.com/" target="_blank" rel="noopener noreferrer">Need a workout? Try the DDPY Spinner</a>
+        </footer>
+    </main>
 
     <script src="gif.js"></script>
+    <script src="themes.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

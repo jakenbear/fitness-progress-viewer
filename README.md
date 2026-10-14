@@ -4,11 +4,12 @@ A simple, private web tool to load, compare, and animate your fitness progress p
 
 ## Features
 - **100% Private:** Runs entirely in your browser. Your photos are never uploaded to any server.
-- **Timeline View:** Load up to 6 images and scrub through them with a slider.
+- **Timeline View:** Load up to 6 images and scrub through them with a slider. Photos are ordered by the date they were taken when the camera saved that date.
 - **Ghost Mode:** Overlay your starting photo on top of current ones to easily compare changes in body composition.
-- **Drag & Drop Reordering:** Easily rearrange your photos to get the timeline just right.
+- **Drag & Drop Reordering:** Rearrange photos on desktop or with a press-and-drag on touch screens.
+- **Themed exports:** Signal, Studio, Diamond (DDP Yoga), and Stamp themes frame both GIFs and composites with type, dates, and progress.
 - **GIF Generator:** Create and download animated GIFs of your progress with custom labels.
-- **Side-by-Side Composite:** Generate a single high-res image comparing all your photos side-by-side.
+- **Side-by-Side Composite:** Generate a single image comparing all your photos side-by-side or stacked.
 
 ## How to Use
 You can use the live version here: **[FitLapse](https://jakenbear.github.io/fitness-progress-viewer/)**

@@ -3,6 +3,8 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Serve static files from the root directory
 app.use(express.static(__dirname));
 
