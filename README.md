@@ -7,7 +7,7 @@ A simple, private web tool to load, compare, and animate your fitness progress p
 - **Timeline View:** Load up to 6 images and scrub through them with a slider. Photos are ordered by the date they were taken when the camera saved that date.
 - **Ghost Mode:** Overlay your starting photo on top of current ones to easily compare changes in body composition.
 - **Drag & Drop Reordering:** Rearrange photos on desktop or with a press-and-drag on touch screens.
-- **Themed exports:** Signal, Studio, Diamond (DDP Yoga), and Stamp themes frame both GIFs and composites with type, dates, and progress.
+- **Themed exports:** Plain (the default) exports the photos alone. Signal, Studio, Diamond (DDP Yoga), and Stamp frame both GIFs and composites with type, dates, and progress.
 - **GIF Generator:** Create and download animated GIFs of your progress with custom labels.
 - **Side-by-Side Composite:** Generate a single image comparing all your photos side-by-side or stacked.
 
