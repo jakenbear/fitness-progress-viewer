@@ -1,8 +1,20 @@
 const imageInput = document.getElementById('imageInput');
+const dropzone = document.getElementById('dropzone');
+const dropzoneTitle = document.getElementById('dropzoneTitle');
+const dropzoneHint = document.getElementById('dropzoneHint');
+const notice = document.getElementById('notice');
+const viewer = document.getElementById('viewer');
+const emptyState = document.getElementById('emptyState');
+const emptyTitle = document.getElementById('emptyTitle');
+const emptyHint = document.getElementById('emptyHint');
+const viewerChip = document.getElementById('viewerChip');
+const viewerIndex = document.getElementById('viewerIndex');
+const viewerWhen = document.getElementById('viewerWhen');
 const sliderContainer = document.getElementById('sliderContainer');
 const progressSlider = document.getElementById('progressSlider');
 const mainDisplay = document.getElementById('mainDisplay');
 const thumbnailsContainer = document.getElementById('thumbnails');
+const countChip = document.getElementById('countChip');
 const imageLabel = document.getElementById('imageLabel');
 const compositeTitleInput = document.getElementById('compositeTitle');
 const fileNameDisplay = document.getElementById('fileNameDisplay');
@@ -19,30 +31,824 @@ const ghostOpacitySlider = document.getElementById('ghostOpacity');
 const ghostOpacityValue = document.getElementById('ghostOpacityValue');
 const gifResult = document.getElementById('gifResult');
 const compositeResult = document.getElementById('compositeResult');
+const gifSize = document.getElementById('gifSize');
+const compositeSize = document.getElementById('compositeSize');
+
+const MAX_FILES = 6;
+const MAX_BYTES = 20 * 1024 * 1024;
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp)$/i;
+const THEME_NAMES = { signal: 'Signal', studio: 'Studio', diamond: 'Diamond', stamp: 'Stamp' };
 
 let images = [];
+let loadToken = 0;
+let exportToken = 0;
+let exportBusy = false;
+let activeGif = null;
+let noticeTimer = 0;
+let drag = null;
+let suppressClick = false;
 
-function sanitizeFilename(filename) {
-    // Replace special characters with underscores or remove them
-    return filename
-        .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
-        .replace(/\s+/g, '_') // Replace spaces with underscores
-        .replace(/_+/g, '_') // Replace multiple underscores with single underscore
-        .trim();
+function reducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-imageInput.addEventListener('change', handleFiles);
-progressSlider.addEventListener('input', handleSlider);
+function normRotation(deg) {
+    return ((Math.round(deg || 0) % 360) + 360) % 360;
+}
+
+function sanitizeFilename(filename) {
+    return String(filename)
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80) || 'fitlapse';
+}
+
+function isImageFile(file) {
+    const type = (file.type || '').toLowerCase();
+    if (type.startsWith('image/')) return true;
+    if ((!type || type === 'application/octet-stream') && IMAGE_EXT.test(file.name || '')) return true;
+    return false;
+}
+
+function showNotice(message, kind) {
+    notice.textContent = message;
+    notice.classList.remove('hidden', 'ok');
+    if (kind === 'ok') notice.classList.add('ok');
+    notice.setAttribute('role', kind === 'ok' ? 'status' : 'alert');
+    clearTimeout(noticeTimer);
+    if (kind === 'ok') {
+        noticeTimer = setTimeout(() => notice.classList.add('hidden'), 4200);
+    }
+}
+
+function clearNotice() {
+    clearTimeout(noticeTimer);
+    notice.classList.add('hidden');
+    notice.textContent = '';
+}
+
+function selectedTheme() {
+    const checked = document.querySelector('input[name="exportTheme"]:checked');
+    return checked ? checked.value : 'signal';
+}
+
+function selectedLayout() {
+    const checked = document.querySelector('input[name="compositeLayout"]:checked');
+    return checked ? checked.value : 'horizontal';
+}
+
+function paintSliderFill(slider) {
+    const max = Number(slider.max);
+    const val = Number(slider.value);
+    const pct = max <= 0 ? 0 : (val / max) * 100;
+    slider.style.setProperty('--pct', pct + '%');
+}
+
+function setActionsDisabled(disabled) {
+    createGifBtn.disabled = disabled;
+    createCompositeBtn.disabled = disabled;
+}
+
+function releaseImages() {
+    const old = images;
+    images = [];
+    mainDisplay.replaceChildren();
+    old.forEach((img) => {
+        if (img.src) URL.revokeObjectURL(img.src);
+        if (img.decoded) img.decoded.removeAttribute('src');
+    });
+}
+
+function showEmpty() {
+    viewer.classList.remove('has-photos', 'is-loading');
+    emptyState.hidden = false;
+    emptyTitle.textContent = 'No photos yet';
+    emptyHint.textContent = 'Your timeline shows up here. Oldest photo first.';
+    viewerChip.classList.add('hidden');
+    mainDisplay.replaceChildren();
+}
+
+function showLoading() {
+    viewer.classList.remove('has-photos');
+    viewer.classList.add('is-loading');
+    emptyState.hidden = false;
+    emptyTitle.textContent = 'Reading photos…';
+    emptyHint.textContent = 'Keeping everything on this device.';
+    viewerChip.classList.add('hidden');
+}
+
+function hideResult(container) {
+    if (container.dataset.objectUrl) {
+        URL.revokeObjectURL(container.dataset.objectUrl);
+        delete container.dataset.objectUrl;
+    }
+    container.classList.add('hidden');
+    container.replaceChildren();
+}
+
+function showProgress(container, label) {
+    if (container.dataset.objectUrl) {
+        URL.revokeObjectURL(container.dataset.objectUrl);
+        delete container.dataset.objectUrl;
+    }
+    container.classList.remove('hidden');
+    container.replaceChildren();
+    const p = document.createElement('p');
+    p.className = 'progress-label';
+    p.append(document.createTextNode(label + ' '));
+    const pct = document.createElement('span');
+    pct.className = 'progress-pct';
+    pct.textContent = '0%';
+    p.appendChild(pct);
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill';
+    bar.appendChild(fill);
+    container.append(p, bar);
+    container.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+}
+
+function setProgress(container, percent) {
+    const pct = container.querySelector('.progress-pct');
+    const fill = container.querySelector('.progress-fill');
+    const value = Math.max(0, Math.min(100, percent));
+    if (pct) pct.textContent = value + '%';
+    if (fill) fill.style.width = value + '%';
+}
+
+function showDownload(container, blob, filename, kind, theme) {
+    hideResult(container);
+    container.classList.remove('hidden');
+    const url = URL.createObjectURL(blob);
+    container.dataset.objectUrl = url;
+
+    const label = document.createElement('p');
+    label.className = 'result-label';
+    label.textContent = (THEME_NAMES[theme] || theme) + ' · ' + kind;
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = kind + ' preview, ' + (THEME_NAMES[theme] || theme) + ' theme';
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.className = 'btn btn-download';
+    link.textContent = kind === 'GIF' ? 'Download GIF' : 'Download composite';
+
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = 'Ready on this device. Nothing was uploaded.';
+
+    container.append(label, img, link, note);
+    container.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+}
+
+function exportFilename(theme, ext) {
+    const title = compositeTitleInput.value.trim();
+    const base = title ? sanitizeFilename(title) : 'fitlapse';
+    return base + '-' + theme + '.' + ext;
+}
+
+function finishExport(token) {
+    if (token !== exportToken) return;
+    exportBusy = false;
+    activeGif = null;
+    setActionsDisabled(false);
+}
+
+function decodeImage(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            if (!img.naturalWidth || !img.naturalHeight) reject(new Error('empty'));
+            else resolve(img);
+        };
+        img.onerror = () => reject(new Error('decode'));
+        img.src = src;
+    });
+}
+
+function readAscii(view, offset, length) {
+    if (offset < 0 || offset + length > view.byteLength) return null;
+    let text = '';
+    const max = Math.min(length, 64);
+    for (let i = 0; i < max; i++) {
+        const code = view.getUint8(offset + i);
+        if (code === 0) break;
+        text += String.fromCharCode(code);
+    }
+    return text;
+}
+
+function parseExifDate(raw) {
+    if (!raw) return null;
+    const match = raw.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (!match) return null;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
+    return isNaN(date.getTime()) ? null : date;
+}
+
+function tiffDate(view, base) {
+    if (base + 8 > view.byteLength) return null;
+    const order = view.getUint16(base);
+    const le = order === 0x4949;
+    if (!le && order !== 0x4d4d) return null;
+    const u16 = (offset) => (offset >= 0 && offset + 2 <= view.byteLength ? view.getUint16(offset, le) : 0);
+    const u32 = (offset) => (offset >= 0 && offset + 4 <= view.byteLength ? view.getUint32(offset, le) : 0);
+    if (u16(base + 2) !== 42) return null;
+
+    function asciiTag(ifd, tagWanted) {
+        if (ifd < base || ifd + 2 > view.byteLength) return null;
+        const count = u16(ifd);
+        if (count > 80 || ifd + 2 + count * 12 > view.byteLength) return null;
+        for (let i = 0; i < count; i++) {
+            const entry = ifd + 2 + i * 12;
+            const tag = u16(entry);
+            const type = u16(entry + 2);
+            const num = u32(entry + 4);
+            if (tag === tagWanted && type === 2 && num >= 10 && num < 64) {
+                let valueOffset = entry + 8;
+                if (num > 4) valueOffset = base + u32(entry + 8);
+                return readAscii(view, valueOffset, num);
+            }
+        }
+        return null;
+    }
+
+    function pointer(ifd, tagWanted) {
+        if (ifd < base || ifd + 2 > view.byteLength) return null;
+        const count = u16(ifd);
+        if (count > 80 || ifd + 2 + count * 12 > view.byteLength) return null;
+        for (let i = 0; i < count; i++) {
+            const entry = ifd + 2 + i * 12;
+            if (u16(entry) === tagWanted) return base + u32(entry + 8);
+        }
+        return null;
+    }
+
+    const ifd0 = base + u32(base + 4);
+    const exifIfd = pointer(ifd0, 0x8769);
+    const raw = (exifIfd && (asciiTag(exifIfd, 0x9003) || asciiTag(exifIfd, 0x9004))) || asciiTag(ifd0, 0x0132);
+    return parseExifDate(raw);
+}
+
+function readExifDate(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 12 || view.getUint16(0) !== 0xffd8) return null;
+    let offset = 2;
+    while (offset + 4 <= view.byteLength) {
+        if (view.getUint8(offset) !== 0xff) return null;
+        let marker = view.getUint8(offset + 1);
+        while (marker === 0xff && offset + 2 < view.byteLength) {
+            offset += 1;
+            marker = view.getUint8(offset + 1);
+        }
+        if (marker === 0xda || marker === 0xd9) return null;
+        if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) {
+            offset += 2;
+            continue;
+        }
+        const size = view.getUint16(offset + 2);
+        if (size < 2 || offset + 2 + size > view.byteLength) return null;
+        if (marker === 0xe1) {
+            const start = offset + 4;
+            if (start + 14 <= view.byteLength && view.getUint32(start) === 0x45786966 && view.getUint16(start + 4) === 0) {
+                return tiffDate(view, start + 6);
+            }
+        }
+        offset += 2 + size;
+    }
+    return null;
+}
+
+async function fileCapturedAt(file) {
+    const fallback = new Date(file.lastModified || Date.now());
+    const type = (file.type || '').toLowerCase();
+    const isJpeg = type === 'image/jpeg' || type === 'image/jpg' || /\.jpe?g$/i.test(file.name || '');
+    if (!isJpeg) return fallback;
+    try {
+        const buffer = await file.slice(0, 512 * 1024).arrayBuffer();
+        const exif = readExifDate(buffer);
+        if (exif && !isNaN(exif.getTime())) return exif;
+    } catch (error) {
+        console.error(error);
+    }
+    return isNaN(fallback.getTime()) ? new Date() : fallback;
+}
+
+async function loadFiles(fileList) {
+    const files = Array.from(fileList || []).filter((file) => file && typeof file.size === 'number');
+    if (!files.length) return;
+
+    const tooBig = files.filter((file) => file.size > MAX_BYTES);
+    const notImage = files.filter((file) => file.size <= MAX_BYTES && !isImageFile(file));
+    if (tooBig.length || notImage.length) {
+        const reasons = [];
+        if (tooBig.length) reasons.push('each photo must be under 20MB');
+        if (notImage.length) reasons.push('use JPEG, PNG, or WebP');
+        showNotice("Couldn't add those files — " + reasons.join(', and ') + '.');
+        return;
+    }
+    if (files.length > MAX_FILES) {
+        showNotice('Choose up to 6 photos at a time.');
+        return;
+    }
+
+    const token = ++loadToken;
+    showLoading();
+    clearNotice();
+
+    const decoded = await Promise.all(files.map(async (file) => {
+        const capturedAt = await fileCapturedAt(file);
+        const src = URL.createObjectURL(file);
+        try {
+            const image = await decodeImage(src);
+            return { ok: true, file: file, src: src, image: image, capturedAt: capturedAt };
+        } catch (error) {
+            URL.revokeObjectURL(src);
+            return { ok: false, name: file.name || 'photo' };
+        }
+    }));
+
+    if (token !== loadToken) {
+        decoded.forEach((item) => {
+            if (item.ok) URL.revokeObjectURL(item.src);
+        });
+        return;
+    }
+
+    const ready = decoded.filter((item) => item.ok);
+    const failed = decoded.filter((item) => !item.ok);
+    if (!ready.length) {
+        showNotice("This browser couldn't read those photos. If they're HEIC, export a JPEG and try again.");
+        if (images.length) initializeViewer(Number(progressSlider.value) || 0);
+        else showEmpty();
+        return;
+    }
+
+    ready.sort((a, b) => {
+        const delta = a.capturedAt - b.capturedAt;
+        if (delta) return delta;
+        return a.file.name.localeCompare(b.file.name);
+    });
+
+    releaseImages();
+    images = ready.map((item, index) => ({
+        src: item.src,
+        decoded: item.image,
+        name: item.file.name,
+        nameWithoutExt: item.file.name.replace(/\.[^/.]+$/, ''),
+        capturedAt: item.capturedAt,
+        sortIndex: index,
+        rotation: 0,
+        flipped: false
+    }));
+
+    hideResult(gifResult);
+    hideResult(compositeResult);
+    initializeViewer(0);
+
+    if (failed.length) {
+        showNotice('Skipped ' + failed.map((item) => item.name).join(', ') + " — this browser couldn't read them.");
+    }
+}
+
+function paintThumb(canvas, imgData) {
+    const size = canvas.width;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#07090f';
+    ctx.fillRect(0, 0, size, size);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, size, size);
+    ctx.clip();
+    FitThemes.drawImageFitted(ctx, imgData.decoded, imgData.rotation || 0, imgData.flipped, 0, 0, size, size, 'cover');
+    ctx.restore();
+}
+
+function initializeViewer(activeIndex) {
+    mainDisplay.replaceChildren();
+    thumbnailsContainer.replaceChildren();
+    viewer.classList.add('has-photos');
+    viewer.classList.remove('is-loading');
+    emptyState.hidden = true;
+
+    images.forEach((imgData, idx) => {
+        const img = imgData.decoded;
+        img.id = 'img-' + idx;
+        img.alt = imgData.name || ('Photo ' + (idx + 1));
+        img.draggable = false;
+        img.className = '';
+        mainDisplay.appendChild(img);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'thumbnail';
+        button.dataset.index = String(idx);
+        button.setAttribute('role', 'option');
+        const when = imgData.capturedAt ? FitThemes.formatShortDate(imgData.capturedAt) : '';
+        button.setAttribute('aria-label', 'Photo ' + (idx + 1) + (when ? ', ' + when : '') + ', ' + (imgData.name || ''));
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 160;
+        paintThumb(canvas, imgData);
+        button.appendChild(canvas);
+        thumbnailsContainer.appendChild(button);
+    });
+
+    sliderContainer.classList.remove('hidden');
+    progressSlider.max = String(Math.max(0, images.length - 1));
+    progressSlider.disabled = images.length < 2;
+    countChip.textContent = images.length === 1 ? '1 photo' : images.length + ' photos';
+    dropzoneTitle.textContent = 'Choose photos';
+    dropzoneHint.textContent = 'Replaces the current set · up to 6';
+    const index = Math.max(0, Math.min(activeIndex || 0, images.length - 1));
+    updateView(index);
+}
+
+function scrollThumb(el) {
+    const left = el.offsetLeft - thumbnailsContainer.clientWidth / 2 + el.offsetWidth / 2;
+    thumbnailsContainer.scrollTo({ left: Math.max(0, left), behavior: reducedMotion() ? 'auto' : 'smooth' });
+}
+
+function updateView(index) {
+    if (!images.length) return;
+    index = Math.max(0, Math.min(images.length - 1, index));
+    const boxW = mainDisplay.clientWidth || viewer.clientWidth;
+    const boxH = mainDisplay.clientHeight || viewer.clientHeight;
+    const ghostOn = ghostModeCheckbox.checked && index !== 0;
+    mainDisplay.style.setProperty('--ghost-opacity', ghostOpacitySlider.value);
+
+    images.forEach((imgData, idx) => {
+        const el = imgData.decoded;
+        const rotation = normRotation(imgData.rotation || 0);
+        const quarter = rotation % 180 === 90;
+        el.classList.toggle('active', idx === index);
+        el.classList.toggle('ghost', ghostOn && idx === 0);
+        el.style.maxWidth = (quarter ? boxH : boxW) + 'px';
+        el.style.maxHeight = (quarter ? boxW : boxH) + 'px';
+        el.style.setProperty('--rot', rotation + 'deg');
+        el.style.setProperty('--sx', imgData.flipped ? '-1' : '1');
+    });
+
+    thumbnailsContainer.querySelectorAll('.thumbnail').forEach((thumb, idx) => {
+        const on = idx === index;
+        thumb.classList.toggle('active', on);
+        thumb.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) scrollThumb(thumb);
+    });
+
+    const current = images[index];
+    const caption = typeof current.customLabel === 'string' ? current.customLabel : (current.nameWithoutExt || '');
+    if (document.activeElement !== imageLabel) imageLabel.value = caption;
+    const when = current.capturedAt ? FitThemes.formatShortDate(current.capturedAt) : '';
+    fileNameDisplay.textContent = when ? current.name + ' · ' + when : current.name;
+    viewerIndex.textContent = (index + 1) + ' / ' + images.length;
+    viewerWhen.textContent = when;
+    viewerChip.classList.remove('hidden');
+    progressSlider.value = String(index);
+    progressSlider.setAttribute('aria-valuemin', '0');
+    progressSlider.setAttribute('aria-valuemax', String(images.length - 1));
+    progressSlider.setAttribute('aria-valuenow', String(index));
+    progressSlider.setAttribute('aria-valuetext', 'Photo ' + (index + 1) + ' of ' + images.length + (when ? ', ' + when : ''));
+    paintSliderFill(progressSlider);
+}
+
+function reorderImages(from, to) {
+    const [item] = images.splice(from, 1);
+    images.splice(to, 0, item);
+    images.forEach((img, idx) => { img.sortIndex = idx; });
+    initializeViewer(to);
+}
+
+function clearDragStyles() {
+    thumbnailsContainer.querySelectorAll('.thumbnail').forEach((el) => {
+        el.classList.remove('dragging', 'drop-target');
+    });
+}
+
+function thumbIndexAt(x, y) {
+    const thumbs = Array.from(thumbnailsContainer.querySelectorAll('.thumbnail'));
+    let best = null;
+    let bestDist = Infinity;
+    thumbs.forEach((thumb, idx) => {
+        const rect = thumb.getBoundingClientRect();
+        if (y < rect.top - 28 || y > rect.bottom + 28) return;
+        const dist = Math.abs(x - (rect.left + rect.width / 2));
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = idx;
+        }
+    });
+    return best;
+}
+
+function onThumbPointerDown(event) {
+    const thumb = event.target.closest('.thumbnail');
+    if (!thumb || event.button > 0) return;
+    drag = {
+        pointerId: event.pointerId,
+        index: Number(thumb.dataset.index),
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        moved: false,
+        active: event.pointerType === 'mouse',
+        timer: null,
+        el: thumb
+    };
+    if (event.pointerType !== 'mouse') {
+        drag.timer = setTimeout(() => {
+            if (!drag || drag.moved) return;
+            drag.active = true;
+            thumb.classList.add('dragging');
+        }, 260);
+    }
+    thumb.setPointerCapture(event.pointerId);
+}
+
+function onThumbPointerMove(event) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    if (!drag.moved && Math.hypot(dx, dy) > 8) {
+        drag.moved = true;
+        if (drag.active) drag.el.classList.add('dragging');
+        else clearTimeout(drag.timer);
+    }
+    if (!drag.active || !drag.moved) return;
+    event.preventDefault();
+    const target = thumbIndexAt(event.clientX, event.clientY);
+    thumbnailsContainer.querySelectorAll('.thumbnail').forEach((el, idx) => {
+        el.classList.toggle('drop-target', target !== null && idx === target && idx !== drag.index);
+    });
+}
+
+function finishDrag(x, y) {
+    if (!drag) return;
+    const from = drag.index;
+    const moved = drag.active && drag.moved;
+    clearTimeout(drag.timer);
+    const target = moved ? thumbIndexAt(x, y) : null;
+    clearDragStyles();
+    drag = null;
+    if (target !== null && target !== from) {
+        suppressClick = true;
+        reorderImages(from, target);
+        setTimeout(() => { suppressClick = false; }, 50);
+    }
+}
+
+function onThumbPointerUp(event) {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    const x = event.clientX || drag.lastX;
+    const y = event.clientY || drag.lastY;
+    finishDrag(x, y);
+}
+
+function onThumbTouchEnd(event) {
+    if (!drag) return;
+    const touch = event.changedTouches && event.changedTouches[0];
+    const x = (touch && touch.clientX) || drag.lastX;
+    const y = (touch && touch.clientY) || drag.lastY;
+    if (x == null || y == null) return;
+    finishDrag(x, y);
+}
+
+function onThumbClick(event) {
+    const thumb = event.target.closest('.thumbnail');
+    if (!thumb || suppressClick) return;
+    updateView(Number(thumb.dataset.index));
+}
+
+function rotateImage(deg) {
+    const index = Number(progressSlider.value);
+    if (!images[index]) return;
+    images[index].rotation = normRotation((images[index].rotation || 0) + deg);
+    const canvas = thumbnailsContainer.querySelectorAll('.thumbnail canvas')[index];
+    if (canvas) paintThumb(canvas, images[index]);
+    updateView(index);
+}
+
+function flipImage() {
+    const index = Number(progressSlider.value);
+    if (!images[index]) return;
+    images[index].flipped = !images[index].flipped;
+    const canvas = thumbnailsContainer.querySelectorAll('.thumbnail canvas')[index];
+    if (canvas) paintThumb(canvas, images[index]);
+    updateView(index);
+}
+
+function resetAllTransforms() {
+    images.forEach((img) => {
+        img.rotation = 0;
+        img.flipped = false;
+    });
+    thumbnailsContainer.querySelectorAll('.thumbnail canvas').forEach((canvas, idx) => {
+        paintThumb(canvas, images[idx]);
+    });
+    updateView(Number(progressSlider.value) || 0);
+}
+
+function clearAll() {
+    if (!images.length && sliderContainer.classList.contains('hidden')) return;
+    if (!confirm('Clear all photos and start over?')) return;
+    exportToken += 1;
+    if (activeGif) {
+        try { activeGif.abort(); } catch (error) { /* already finished */ }
+        activeGif = null;
+    }
+    exportBusy = false;
+    setActionsDisabled(false);
+    releaseImages();
+    showEmpty();
+    thumbnailsContainer.replaceChildren();
+    sliderContainer.classList.add('hidden');
+    hideResult(gifResult);
+    hideResult(compositeResult);
+    imageInput.value = '';
+    compositeTitleInput.value = '';
+    imageLabel.value = '';
+    fileNameDisplay.textContent = '';
+    progressSlider.value = '0';
+    ghostModeCheckbox.checked = false;
+    ghostOpacityControl.classList.add('hidden');
+    dropzoneHint.textContent = 'or drop them here · up to 6 · JPEG, PNG, WebP';
+    clearNotice();
+}
+
+function themeItems() {
+    return images.map((img) => ({
+        img: img.decoded,
+        data: {
+            rotation: img.rotation || 0,
+            flipped: !!img.flipped,
+            customLabel: img.customLabel,
+            nameWithoutExt: img.nameWithoutExt,
+            capturedAt: img.capturedAt,
+            name: img.name
+        }
+    }));
+}
+
+async function createGif() {
+    if (exportBusy || !images.length) return;
+    const token = ++exportToken;
+    exportBusy = true;
+    setActionsDisabled(true);
+    const theme = selectedTheme();
+    showProgress(gifResult, 'Rendering GIF');
+
+    try {
+        await FitThemes.ensureFonts();
+        if (token !== exportToken) return finishExport(token);
+
+        const visual = FitThemes.getVisualSize(images[0].decoded, images[0].rotation);
+        let photoW = visual.width;
+        let photoH = visual.height;
+        if (!photoW || !photoH) throw new Error('size');
+        if (gifSize.value !== 'original') {
+            const target = parseInt(gifSize.value, 10);
+            if (photoW > target) {
+                const scale = target / photoW;
+                photoW = target;
+                photoH = Math.max(2, Math.round(photoH * scale));
+            }
+        }
+        photoW = Math.max(2, Math.round(photoW));
+        photoH = Math.max(2, Math.round(photoH));
+        const layout = FitThemes.gifLayout(photoW, photoH, theme);
+        if (layout.width > 4096 || layout.height > 4096) {
+            hideResult(gifResult);
+            showNotice('That GIF is too large. Choose a smaller GIF size.');
+            return finishExport(token);
+        }
+
+        const gif = new GIF({
+            workers: 2,
+            quality: 10,
+            width: layout.width,
+            height: layout.height,
+            workerScript: 'gif.worker.js',
+            background: FitThemes.background(theme)
+        });
+        activeGif = gif;
+        const canvas = document.createElement('canvas');
+        canvas.width = layout.width;
+        canvas.height = layout.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        gif.on('progress', (p) => {
+            if (token !== exportToken) return;
+            setProgress(gifResult, Math.round(p * 100));
+        });
+        gif.on('finished', (blob) => {
+            if (token !== exportToken) return;
+            showDownload(gifResult, blob, exportFilename(theme, 'gif'), 'GIF', theme);
+            finishExport(token);
+        });
+
+        images.forEach((imgData, index) => {
+            FitThemes.paintGifFrame(ctx, imgData.decoded, themeItems()[index].data, index, themeItems().map((item) => item.data), theme, photoW, photoH);
+            gif.addFrame(ctx, { copy: true, delay: 800 });
+        });
+        gif.render();
+    } catch (error) {
+        console.error(error);
+        hideResult(gifResult);
+        showNotice('The GIF could not be created. Try a smaller size.');
+        finishExport(token);
+    }
+}
+
+async function createComposite() {
+    if (exportBusy || !images.length) return;
+    const token = ++exportToken;
+    exportBusy = true;
+    setActionsDisabled(true);
+    const theme = selectedTheme();
+    showProgress(compositeResult, 'Rendering composite');
+
+    try {
+        await FitThemes.ensureFonts();
+        if (token !== exportToken) return finishExport(token);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        setProgress(compositeResult, 35);
+        const result = FitThemes.renderComposite(themeItems(), theme, {
+            layout: selectedLayout(),
+            scale: parseFloat(compositeSize.value),
+            title: compositeTitleInput.value.trim()
+        });
+        if (!result || result.error) {
+            hideResult(compositeResult);
+            showNotice('That composite is too large for the browser. Pick a smaller composite size and try again.');
+            return finishExport(token);
+        }
+        setProgress(compositeResult, 75);
+        const blob = await new Promise((resolve, reject) => {
+            result.canvas.toBlob((value) => {
+                if (value) resolve(value);
+                else reject(new Error('blob'));
+            }, 'image/jpeg', 0.93);
+        });
+        if (token !== exportToken) return finishExport(token);
+        showDownload(compositeResult, blob, exportFilename(theme, 'jpg'), 'Composite', theme);
+        finishExport(token);
+    } catch (error) {
+        console.error(error);
+        hideResult(compositeResult);
+        showNotice('The composite could not be created. Try a smaller size.');
+        finishExport(token);
+    }
+}
+
+imageInput.addEventListener('change', () => {
+    const files = Array.from(imageInput.files || []);
+    imageInput.value = '';
+    if (files.length) loadFiles(files);
+});
+
+emptyState.addEventListener('click', () => imageInput.click());
+
+['dragenter', 'dragover'].forEach((type) => {
+    document.addEventListener(type, (event) => {
+        event.preventDefault();
+        dropzone.classList.add('is-dragover');
+    });
+});
+document.addEventListener('dragleave', (event) => {
+    if (!event.relatedTarget) dropzone.classList.remove('is-dragover');
+});
+document.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dropzone.classList.remove('is-dragover');
+    const files = event.dataTransfer && event.dataTransfer.files;
+    if (files && files.length) loadFiles(files);
+});
+
+progressSlider.addEventListener('input', () => updateView(Number(progressSlider.value)));
 ghostModeCheckbox.addEventListener('change', () => {
-    updateGhost(parseInt(progressSlider.value));
-    ghostOpacityControl.style.display = ghostModeCheckbox.checked ? 'flex' : 'none';
-    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
+    ghostOpacityControl.classList.toggle('hidden', !ghostModeCheckbox.checked);
+    updateView(Number(progressSlider.value) || 0);
 });
-ghostOpacitySlider.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
+ghostOpacitySlider.addEventListener('input', () => {
+    const value = parseFloat(ghostOpacitySlider.value);
     ghostOpacityValue.textContent = Math.round(value * 100) + '%';
-    updateGhostOpacity(value);
+    mainDisplay.style.setProperty('--ghost-opacity', String(value));
+    paintSliderFill(ghostOpacitySlider);
 });
+imageLabel.addEventListener('input', () => {
+    const index = Number(progressSlider.value);
+    if (images[index]) images[index].customLabel = imageLabel.value;
+});
+
 createGifBtn.addEventListener('click', createGif);
 createCompositeBtn.addEventListener('click', createComposite);
 rotateLeftBtn.addEventListener('click', () => rotateImage(-90));
@@ -51,670 +857,67 @@ flipBtn.addEventListener('click', flipImage);
 resetAllBtn.addEventListener('click', resetAllTransforms);
 clearAllBtn.addEventListener('click', clearAll);
 
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return; // Ignore if typing in inputs
-    
-    const index = parseInt(progressSlider.value);
-    switch (e.key) {
+thumbnailsContainer.addEventListener('pointerdown', onThumbPointerDown);
+thumbnailsContainer.addEventListener('pointermove', onThumbPointerMove);
+thumbnailsContainer.addEventListener('pointerup', onThumbPointerUp);
+thumbnailsContainer.addEventListener('pointercancel', onThumbPointerUp);
+document.addEventListener('touchend', onThumbTouchEnd, true);
+thumbnailsContainer.addEventListener('click', onThumbClick);
+thumbnailsContainer.addEventListener('contextmenu', (event) => {
+    if (event.target.closest('.thumbnail')) event.preventDefault();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.tagName === 'SELECT') return;
+    if (!images.length) return;
+    const index = Number(progressSlider.value) || 0;
+    switch (event.key) {
         case 'ArrowLeft':
-            e.preventDefault();
-            if (index > 0) {
-                progressSlider.value = index - 1;
-                updateView(index - 1);
-            }
+            event.preventDefault();
+            if (index > 0) updateView(index - 1);
             break;
         case 'ArrowRight':
-            e.preventDefault();
-            if (index < images.length - 1) {
-                progressSlider.value = index + 1;
-                updateView(index + 1);
-            }
+            event.preventDefault();
+            if (index < images.length - 1) updateView(index + 1);
             break;
         case 'r':
         case 'R':
-            e.preventDefault();
+            event.preventDefault();
             rotateImage(90);
             break;
         case 'l':
         case 'L':
-            e.preventDefault();
+            event.preventDefault();
             rotateImage(-90);
             break;
         case 'f':
         case 'F':
-            e.preventDefault();
+            event.preventDefault();
             flipImage();
             break;
         case 'g':
         case 'G':
-            e.preventDefault();
+            event.preventDefault();
             if (!createGifBtn.disabled) createGif();
             break;
         case 'c':
         case 'C':
-            e.preventDefault();
+            event.preventDefault();
             if (!createCompositeBtn.disabled) createComposite();
+            break;
+        default:
             break;
     }
 });
 
-imageLabel.addEventListener('input', (e) => {
-    const index = parseInt(progressSlider.value);
-    if (images[index]) {
-        images[index].customLabel = e.target.value;
-    }
-});
-
-function handleFiles(e) {
-    const files = Array.from(e.target.files);
-    
-    if (files.length === 0) return;
-
-    // Validate files
-    const maxFileSize = 20 * 1024 * 1024; // 20MB
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-    const invalidFiles = files.filter(file => file.size > maxFileSize || !allowedTypes.includes(file.type));
-    
-    if (invalidFiles.length > 0) {
-        alert(`Some files are invalid:\n- Max size: 20MB\n- Allowed types: JPEG, PNG, WebP, HEIC, HEIF\n\nPlease check and try again.`);
-        return;
-    }
-
-    if (files.length > 6) {
-        alert('Please select up to 6 images.');
-        return;
-    }
-
-    // Sort files by last modified date (oldest first)
-    files.sort((a, b) => a.lastModified - b.lastModified);
-
-    // Clear previous
-    images = [];
-    mainDisplay.innerHTML = '';
-    thumbnailsContainer.innerHTML = '';
-    gifResult.classList.add('hidden');
-    gifResult.innerHTML = '';
-    compositeResult.classList.add('hidden');
-    compositeResult.innerHTML = '';
-
-    let loadedCount = 0;
-    let failedCount = 0;
-
-    files.forEach((file, index) => {
-        const reader = new FileReader();
-        
-        reader.onload = (event) => {
-            try {
-                const dateObj = new Date(file.lastModified);
-                const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-                
-                const imgObj = {
-                    src: event.target.result,
-                    name: file.name,
-                    nameWithoutExt: nameWithoutExt,
-                    date: dateObj.toLocaleDateString(),
-                    monthYear: monthYear,
-                    sortIndex: index,
-                    rotation: 0,
-                    flipped: false
-                };
-                
-                images.push(imgObj);
-                loadedCount++;
-                if (loadedCount === files.length - failedCount) {
-                    images.sort((a, b) => a.sortIndex - b.sortIndex);
-                    initializeViewer();
-                }
-            } catch (error) {
-                console.error('Error processing image:', error);
-                failedCount++;
-                if (loadedCount + failedCount === files.length) {
-                    if (loadedCount > 0) {
-                        images.sort((a, b) => a.sortIndex - b.sortIndex);
-                        initializeViewer();
-                    } else {
-                        alert('Failed to load any images. Please try different files.');
-                    }
-                }
-            }
-        };
-
-        reader.onerror = () => {
-            console.error('File read error for:', file.name);
-            failedCount++;
-            if (loadedCount + failedCount === files.length) {
-                if (loadedCount > 0) {
-                    images.sort((a, b) => a.sortIndex - b.sortIndex);
-                    initializeViewer();
-                } else {
-                    alert('Failed to load any images. Please try different files.');
-                }
-            }
-        };
-
-        reader.readAsDataURL(file);
+if (window.ResizeObserver) {
+    const observer = new ResizeObserver(() => {
+        if (!images.length) return;
+        updateView(Number(progressSlider.value) || 0);
     });
+    observer.observe(viewer);
 }
 
-function initializeViewer() {
-    if (images.length === 0) return;
-
-    // Clear containers to prevent duplication on re-render
-    mainDisplay.innerHTML = '';
-    thumbnailsContainer.innerHTML = '';
-
-    sliderContainer.classList.remove('hidden');
-    progressSlider.max = images.length - 1;
-    progressSlider.value = 0;
-
-    images.forEach((imgData, idx) => {
-        const img = document.createElement('img');
-        img.src = imgData.src;
-        img.id = `img-${idx}`;
-        if (idx === 0) img.classList.add('active');
-        mainDisplay.appendChild(img);
-
-        const thumb = document.createElement('img');
-        thumb.src = imgData.src;
-        thumb.classList.add('thumbnail');
-        thumb.draggable = true; // Enable drag
-        thumb.dataset.index = idx; // Store index
-
-        if (idx === 0) thumb.classList.add('active');
-        
-        thumb.addEventListener('click', () => {
-            progressSlider.value = idx;
-            updateView(idx);
-        });
-
-        // Drag Events
-        thumb.addEventListener('dragstart', handleDragStart);
-        thumb.addEventListener('dragover', handleDragOver);
-        thumb.addEventListener('drop', handleDrop);
-        thumb.addEventListener('dragenter', handleDragEnter);
-        thumb.addEventListener('dragleave', handleDragLeave);
-
-        thumbnailsContainer.appendChild(thumb);
-    });
-
-    updateView(0);
-}
-
-let draggedItemIndex = null;
-
-function handleDragStart(e) {
-    draggedItemIndex = parseInt(this.dataset.index);
-    this.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragOver(e) {
-    e.preventDefault(); // Necessary to allow dropping
-    e.dataTransfer.dropEffect = 'move';
-    return false;
-}
-
-function handleDragEnter(e) {
-    this.classList.add('drag-over');
-}
-
-function handleDragLeave(e) {
-    this.classList.remove('drag-over');
-}
-
-function handleDrop(e) {
-    e.stopPropagation(); // stops the browser from redirecting.
-    e.preventDefault();
-
-    const dropTargetIndex = parseInt(this.dataset.index);
-
-    if (draggedItemIndex !== null && draggedItemIndex !== dropTargetIndex) {
-        // Reorder array
-        const itemToMove = images[draggedItemIndex];
-        images.splice(draggedItemIndex, 1);
-        images.splice(dropTargetIndex, 0, itemToMove);
-
-        // Re-initialize viewer with new order
-        // We need to update sortIndex if we want to persist this order logic, 
-        // but for now just re-rendering based on the array order is enough.
-        // However, initializeViewer relies on the array order.
-        
-        // Update sortIndex to match new array order just in case
-        images.forEach((img, idx) => img.sortIndex = idx);
-
-        initializeViewer();
-        
-        // Restore view to the dropped item
-        progressSlider.value = dropTargetIndex;
-        updateView(dropTargetIndex);
-    }
-    
-    return false;
-}
-
-function handleSlider(e) {
-    const index = parseInt(e.target.value);
-    updateView(index);
-}
-
-function rotateImage(deg) {
-    const index = parseInt(progressSlider.value);
-    if (images[index]) {
-        images[index].rotation = (images[index].rotation + deg) % 360;
-        updateView(index);
-    }
-}
-
-function flipImage() {
-    const index = parseInt(progressSlider.value);
-    if (images[index]) {
-        images[index].flipped = !images[index].flipped;
-        updateView(index);
-    }
-}
-
-function resetAllTransforms() {
-    images.forEach(img => {
-        img.rotation = 0;
-        img.flipped = false;
-    });
-    const index = parseInt(progressSlider.value);
-    updateView(index);
-}
-
-function clearAll() {
-    if (confirm('Are you sure you want to clear all images and reset the app?')) {
-        images = [];
-        mainDisplay.innerHTML = '<div class="placeholder">No images loaded</div>';
-        thumbnailsContainer.innerHTML = '';
-        sliderContainer.classList.add('hidden');
-        gifResult.classList.add('hidden');
-        gifResult.innerHTML = '';
-        compositeResult.classList.add('hidden');
-        compositeResult.innerHTML = '';
-        imageInput.value = '';
-        compositeTitleInput.value = '';
-        fileNameDisplay.textContent = '';
-        progressSlider.value = 0;
-        ghostModeCheckbox.checked = false;
-    }
-}
-
-function updateView(index) {
-    const allImages = mainDisplay.querySelectorAll('img');
-    allImages.forEach(img => {
-        img.classList.remove('active');
-        // Reset transform for inactive images to avoid weird transitions if we want, 
-        // but keeping it might be better. 
-        // Actually, we should set the transform based on the data.
-    });
-    
-    const activeImg = document.getElementById(`img-${index}`);
-    if (activeImg) {
-        activeImg.classList.add('active');
-        if (images[index]) {
-            const rotation = images[index].rotation || 0;
-            const scaleX = images[index].flipped ? -1 : 1;
-            activeImg.style.transform = `rotate(${rotation}deg) scaleX(${scaleX})`;
-        }
-    }
-
-    const allThumbs = thumbnailsContainer.querySelectorAll('.thumbnail');
-    allThumbs.forEach(thumb => thumb.classList.remove('active'));
-    if (allThumbs[index]) allThumbs[index].classList.add('active');
-
-    if (images[index]) {
-        imageLabel.value = images[index].customLabel || images[index].nameWithoutExt;
-        fileNameDisplay.textContent = images[index].name;
-    }
-
-    updateGhost(index);
-    updateGhostOpacity(parseFloat(ghostOpacitySlider.value));
-}
-
-function updateGhost(currentIndex) {
-    const isGhost = ghostModeCheckbox.checked;
-    const firstImg = document.getElementById('img-0');
-    
-    if (!firstImg) return;
-
-    // Reset ghost class and opacity first
-    firstImg.classList.remove('ghost');
-    firstImg.style.opacity = '1';
-
-    // If Ghost Mode is ON and we are NOT on the first image
-    if (isGhost && currentIndex !== 0) {
-        firstImg.classList.add('ghost');
-        // Opacity will be set by updateGhostOpacity
-    }
-}
-
-function updateGhostOpacity(opacity) {
-    const ghostImg = document.querySelector('.main-display img.ghost');
-    if (ghostImg) {
-        ghostImg.style.opacity = opacity;
-    }
-}
-
-function isQuarterTurn(rotation) {
-    return Math.abs((rotation || 0) % 180) === 90;
-}
-
-/** On-screen size of an image after rotation (90/270 swaps axes). */
-function getVisualSize(img, rotation) {
-    if (isQuarterTurn(rotation)) {
-        return { width: img.height, height: img.width };
-    }
-    return { width: img.width, height: img.height };
-}
-
-/**
- * Draw an image into a destination box without distorting aspect ratio.
- * mode "contain" letterboxes; "cover" fills and crops overflow.
- */
-function drawImageFitted(ctx, img, rotation, flipped, dx, dy, destW, destH, mode = 'contain') {
-    const { width: visualW, height: visualH } = getVisualSize(img, rotation);
-    const scale = mode === 'cover'
-        ? Math.max(destW / visualW, destH / visualH)
-        : Math.min(destW / visualW, destH / visualH);
-    const drawW = visualW * scale;
-    const drawH = visualH * scale;
-
-    ctx.save();
-    ctx.translate(dx + destW / 2, dy + destH / 2);
-    ctx.rotate((rotation || 0) * Math.PI / 180);
-    if (flipped) {
-        ctx.scale(-1, 1);
-    }
-
-    // After a 90/270 rotation the bitmap’s axes are swapped relative to the visual box
-    if (isQuarterTurn(rotation)) {
-        ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
-    } else {
-        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-    }
-    ctx.restore();
-}
-
-function createGif() {
-    if (images.length === 0) return;
-
-    gifResult.classList.remove('hidden');
-    gifResult.innerHTML = '<p>Generating GIF... <span id="gifProgress">0%</span></p><div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>';
-
-    const sizeOption = document.getElementById('gifSize').value;
-
-    // Determine dimensions from the first image (respecting its rotation)
-    const firstImg = new Image();
-    firstImg.src = images[0].src;
-    
-    firstImg.onload = () => {
-        const visual = getVisualSize(firstImg, images[0].rotation);
-        let width = visual.width;
-        let height = visual.height;
-
-        if (sizeOption !== 'original') {
-            const targetWidth = parseInt(sizeOption);
-            if (width > targetWidth) { // Only scale down, don't scale up
-                const scaleFactor = targetWidth / width;
-                width = targetWidth;
-                height = Math.round(height * scaleFactor);
-            }
-        }
-
-        const gif = new GIF({
-            workers: 2,
-            quality: 10,
-            width: width,
-            height: height,
-            workerScript: 'gif.worker.js'
-        });
-
-        gif.on('progress', (p) => {
-            const percent = Math.round(p * 100);
-            document.getElementById('gifProgress').textContent = `${percent}%`;
-            document.getElementById('progressFill').style.width = `${percent}%`;
-        });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-
-        processImagesForGif(gif, canvas, ctx, width, height);
-    };
-}
-
-async function processImagesForGif(gif, canvas, ctx, width, height) {
-    for (const imgData of images) {
-        await new Promise((resolve) => {
-            const img = new Image();
-            img.src = imgData.src;
-            img.onload = () => {
-                // Solid background so letterboxing is consistent across frames
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(0, 0, width, height);
-
-                drawImageFitted(
-                    ctx,
-                    img,
-                    imgData.rotation || 0,
-                    imgData.flipped,
-                    0,
-                    0,
-                    width,
-                    height,
-                    'contain'
-                );
-                
-                // Draw Label Background
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                // Calculate text width to size background
-                ctx.font = 'bold 40px Arial'; // Larger font for high res images
-                const text = imgData.customLabel || imgData.nameWithoutExt;
-                const textMetrics = ctx.measureText(text);
-                const padding = 20;
-                const bgWidth = textMetrics.width + (padding * 2);
-                const bgHeight = 60;
-                
-                ctx.fillRect(20, 20, bgWidth, bgHeight);
-                
-                // Draw Text
-                ctx.fillStyle = 'white';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(text, 20 + padding, 20 + (bgHeight / 2));
-
-                gif.addFrame(ctx, {copy: true, delay: 800}); // 800ms per frame
-                resolve();
-            };
-        });
-    }
-
-    gif.on('finished', function(blob) {
-        const url = URL.createObjectURL(blob);
-        gifResult.innerHTML = '';
-
-        const resultImg = document.createElement('img');
-        resultImg.src = url;
-        gifResult.appendChild(resultImg);
-
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-
-        // Use title in filename if provided
-        const titleText = compositeTitleInput.value.trim();
-        const sanitizedTitle = titleText ? sanitizeFilename(titleText) : 'fitness-progress';
-        downloadLink.download = `${sanitizedTitle}.gif`;
-
-        downloadLink.textContent = 'Download GIF';
-        downloadLink.className = 'btn';
-        downloadLink.style.display = 'block';
-        downloadLink.style.marginTop = '10px';
-        gifResult.appendChild(downloadLink);
-    });
-
-    gif.render();
-}
-
-async function createComposite() {
-    if (images.length === 0) return;
-
-    compositeResult.classList.remove('hidden');
-    compositeResult.innerHTML = '<p>Generating Composite... <span id="compositeProgress">0%</span></p><div class="progress-bar"><div id="compositeProgressFill" class="progress-fill"></div></div>';
-
-    // Load all images first to get dimensions
-    const loadedImages = await Promise.all(images.map((imgData, index) => {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.src = imgData.src;
-            img.onload = () => {
-                const percent = Math.round(((index + 1) / images.length) * 50); // First 50% for loading
-                document.getElementById('compositeProgress').textContent = `${percent}%`;
-                document.getElementById('compositeProgressFill').style.width = `${percent}%`;
-                resolve({ img, data: imgData });
-            };
-        });
-    }));
-
-    // Match all images to the first image's visual height, preserving each photo's aspect ratio
-    const firstItem = loadedImages[0];
-    const targetHeight = getVisualSize(firstItem.img, firstItem.data.rotation).height;
-    
-    let totalWidth = 0;
-    let maxWidth = 0;
-
-    loadedImages.forEach(item => {
-        const visual = getVisualSize(item.img, item.data.rotation);
-        const fitScale = targetHeight / visual.height;
-        
-        item.finalWidth = visual.width * fitScale;
-        item.finalHeight = targetHeight;
-        
-        totalWidth += item.finalWidth;
-        if (item.finalWidth > maxWidth) maxWidth = item.finalWidth;
-    });
-
-    // Get user-selected layout and size
-    const selectedLayout = document.querySelector('input[name="compositeLayout"]:checked').value;
-    const scaleFactor = parseFloat(document.getElementById('compositeSize').value);
-    const isVertical = selectedLayout === 'vertical';
-    
-    let canvasWidth, canvasHeight;
-    if (isVertical) {
-        canvasWidth = maxWidth;
-        canvasHeight = targetHeight * loadedImages.length;
-    } else {
-        canvasWidth = totalWidth;
-        canvasHeight = targetHeight;
-    }
-
-    // Apply scale factor
-    canvasWidth = Math.round(canvasWidth * scaleFactor);
-    canvasHeight = Math.round(canvasHeight * scaleFactor);
-
-    // Title setup
-    const titleText = compositeTitleInput.value.trim();
-    const titleFontSize = Math.max(80, Math.floor(targetHeight / 15)) * scaleFactor;
-    const titlePadding = titleFontSize;
-    const titleAreaHeight = titleText ? (titleFontSize + (titlePadding * 2)) : 0;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight + titleAreaHeight;
-    const ctx = canvas.getContext('2d');
-
-    // Fill background white
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw Title if exists
-    if (titleText) {
-        ctx.fillStyle = 'black';
-        ctx.font = `bold ${titleFontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(titleText, canvasWidth / 2, titleAreaHeight / 2);
-    }
-
-    // Scale the final dimensions
-    loadedImages.forEach(item => {
-        item.finalWidth *= scaleFactor;
-        item.finalHeight *= scaleFactor;
-    });
-
-    // Draw images
-    let currentX = 0, currentY = titleAreaHeight;
-    loadedImages.forEach((item, index) => {
-        const w = item.finalWidth;
-        const h = item.finalHeight;
-        const x = isVertical ? (canvasWidth - w) / 2 : currentX; // Center horizontally if vertical
-        const y = currentY;
-
-        drawImageFitted(
-            ctx,
-            item.img,
-            item.data.rotation || 0,
-            item.data.flipped,
-            x,
-            y,
-            w,
-            h,
-            'contain'
-        );
-        
-        // Draw Label
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.font = `bold ${40 * scaleFactor}px Arial`;
-        ctx.textAlign = 'left'; // Reset alignment
-        
-        const text = item.data.customLabel || item.data.nameWithoutExt;
-        const textMetrics = ctx.measureText(text);
-        const padding = 20 * scaleFactor;
-        const bgWidth = textMetrics.width + (padding * 2);
-        const bgHeight = 60 * scaleFactor;
-        
-        // Draw label at bottom center of this image segment
-        const labelX = x + (w - bgWidth) / 2;
-        const labelY = y + h - bgHeight - 20 * scaleFactor; 
-
-        ctx.fillRect(labelX, labelY, bgWidth, bgHeight);
-        
-        ctx.fillStyle = 'white';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, labelX + padding, labelY + (bgHeight / 2));
-
-        const percent = Math.round(50 + ((index + 1) / loadedImages.length) * 50); // 50-100% for drawing
-        document.getElementById('compositeProgress').textContent = `${percent}%`;
-        document.getElementById('compositeProgressFill').style.width = `${percent}%`;
-
-        if (isVertical) {
-            currentY += h;
-        } else {
-            currentX += w;
-        }
-    });
-
-    // Output
-    const url = canvas.toDataURL('image/jpeg', 0.9);
-    compositeResult.innerHTML = '';
-
-    const resultImg = document.createElement('img');
-    resultImg.src = url;
-    resultImg.style.maxWidth = '100%';
-    compositeResult.appendChild(resultImg);
-
-    const downloadLink = document.createElement('a');
-    downloadLink.href = url;
-
-    // Use title in filename if provided
-    const sanitizedTitle = titleText ? sanitizeFilename(titleText) : 'fitness-progress-composite';
-    downloadLink.download = `${sanitizedTitle}.jpg`;
-
-    downloadLink.textContent = 'Download Composite Image';
-    downloadLink.className = 'btn';
-    downloadLink.style.display = 'block';
-    downloadLink.style.marginTop = '10px';
-    compositeResult.appendChild(downloadLink);
-}
+paintSliderFill(progressSlider);
+paintSliderFill(ghostOpacitySlider);
+FitThemes.ensureFonts();
