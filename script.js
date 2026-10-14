@@ -37,7 +37,7 @@ const compositeSize = document.getElementById('compositeSize');
 const MAX_FILES = 6;
 const MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp)$/i;
-const THEME_NAMES = { signal: 'Signal', studio: 'Studio', diamond: 'Diamond', stamp: 'Stamp' };
+const THEME_NAMES = { plain: 'Plain', signal: 'Signal', studio: 'Studio', diamond: 'Diamond', stamp: 'Stamp' };
 
 let images = [];
 let loadToken = 0;
@@ -91,7 +91,7 @@ function clearNotice() {
 
 function selectedTheme() {
     const checked = document.querySelector('input[name="exportTheme"]:checked');
-    return checked ? checked.value : 'signal';
+    return checked ? checked.value : 'plain';
 }
 
 function selectedLayout() {

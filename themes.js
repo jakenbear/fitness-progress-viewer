@@ -3,6 +3,7 @@
     const LEVELS = ['#3ddc6a', '#3aa0ff', '#ffd15a', '#ff8a2a', '#ff3b4e'];
 
     const SPEC = {
+        plain: { pad: 0, caption: 0, topBar: false, sideBar: false },
         signal: { pad: 0.05, caption: 0, topBar: false, sideBar: false },
         studio: { pad: 0.055, caption: 0.22, topBar: false, sideBar: false },
         diamond: { pad: 0.05, caption: 0, topBar: true, sideBar: true },
@@ -108,6 +109,7 @@
     }
 
     function background(theme) {
+        if (theme === 'plain') return '#000000';
         if (theme === 'studio') return '#e9eef3';
         if (theme === 'stamp') return '#14110e';
         return '#07090f';
@@ -177,6 +179,20 @@
 
     function metricsFor(photoW, photoH, theme, padBasis) {
         const spec = SPEC[theme] || SPEC.signal;
+        if (theme === 'plain') {
+            return {
+                pad: 0,
+                caption: 0,
+                bar: 0,
+                side: 0,
+                photoW: photoW,
+                photoH: photoH,
+                outerW: photoW,
+                outerH: photoH,
+                photoX: 0,
+                photoY: 0
+            };
+        }
         const basis = padBasis || Math.min(photoW, photoH);
         const pad = Math.max(2, Math.round(basis * spec.pad));
         const caption = spec.caption ? Math.max(1, Math.round(photoH * spec.caption)) : 0;
@@ -559,12 +575,17 @@
         }
     }
 
+    function drawPlain(ctx, x, y, m, img, data) {
+        drawImageFitted(ctx, img, data.rotation, data.flipped, x, y, m.photoW, m.photoH, 'contain');
+    }
+
     function drawThemeCell(ctx, x, y, metrics, img, data, meta, theme) {
         ctx.save();
         if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
-        if (theme === 'studio') drawStudio(ctx, x, y, metrics, img, data, meta);
+        if (theme === 'plain') drawPlain(ctx, x, y, metrics, img, data);
+        else if (theme === 'studio') drawStudio(ctx, x, y, metrics, img, data, meta);
         else if (theme === 'diamond') drawDiamondTheme(ctx, x, y, metrics, img, data, meta);
         else if (theme === 'stamp') drawStamp(ctx, x, y, metrics, img, data, meta);
         else drawSignal(ctx, x, y, metrics, img, data, meta);
@@ -644,6 +665,16 @@
     }
 
     function gifLayout(photoW, photoH, theme) {
+        if (theme === 'plain') {
+            const w = even(photoW);
+            const h = even(photoH);
+            return {
+                metrics: metricsFor(w, h, 'plain'),
+                margin: 0,
+                width: w,
+                height: h
+            };
+        }
         const metrics = metricsFor(photoW, photoH, theme, photoH);
         const margin = theme === 'stamp' ? Math.max(2, Math.round(metrics.pad * 0.7)) : 0;
         return {
@@ -682,9 +713,10 @@
         });
 
         const vertical = options.layout === 'vertical';
-        const gap = Math.max(4, Math.round(cells[0].metrics.pad * 0.7));
-        const margin = Math.max(6, Math.round(cells[0].metrics.pad));
-        const headerH = Math.max(36, Math.round(targetH * 0.26));
+        const plain = theme === 'plain';
+        const gap = plain ? 0 : Math.max(4, Math.round(cells[0].metrics.pad * 0.7));
+        const margin = plain ? 0 : Math.max(6, Math.round(cells[0].metrics.pad));
+        const headerH = plain ? 0 : Math.max(36, Math.round(targetH * 0.26));
         const contentW = vertical
             ? Math.max.apply(null, cells.map((cell) => cell.metrics.outerW))
             : cells.reduce((sum, cell) => sum + cell.metrics.outerW, 0) + gap * (cells.length - 1);
@@ -704,9 +736,9 @@
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.fillStyle = background(theme);
+        ctx.fillStyle = plain ? '#ffffff' : background(theme);
         ctx.fillRect(0, 0, canvasW, canvasH);
-        drawHeader(ctx, canvasW, headerH, theme, options.title, buildStats(items));
+        if (!plain) drawHeader(ctx, canvasW, headerH, theme, options.title, buildStats(items));
 
         let cursorX = margin;
         let cursorY = headerH + margin;

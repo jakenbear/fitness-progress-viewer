@@ -683,6 +683,7 @@ select option {
     display: inline-block;
 }
 
+.theme-swatch.plain { background: linear-gradient(160deg, #f7f8fa, #c5ced8); }
 .theme-swatch.signal { background: linear-gradient(160deg, #102033, #3aa0ff); }
 .theme-swatch.studio { background: linear-gradient(160deg, #f4f7fb, #b7c3d1); }
 .theme-swatch.diamond { background: linear-gradient(160deg, #07090f 42%, #ffd15a); }

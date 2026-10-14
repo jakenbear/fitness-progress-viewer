@@ -80,7 +80,7 @@
                         <button id="resetAllBtn" class="btn-icon" type="button" title="Reset all rotations and flips" aria-label="Reset all rotations and flips">⟲</button>
                     </div>
                 </div>
-                <p class="hint">Printed on the GIF and the composite. Shortcuts: R rotate, L left, F flip.</p>
+                <p class="hint">Captions print on themed exports. Plain leaves the photos bare. Shortcuts: R rotate, L left, F flip.</p>
             </section>
 
             <section class="panel" aria-labelledby="exportLabel">
@@ -137,8 +137,12 @@
                 <div class="field field-theme">
                     <span class="field-label" id="themeLabel">Theme</span>
                     <div class="choice-row theme-row" role="radiogroup" aria-labelledby="themeLabel">
+                        <label class="choice" title="Photos only, with no frame, date, or branding">
+                            <input type="radio" name="exportTheme" value="plain" checked>
+                            <span><i class="theme-swatch plain" aria-hidden="true"></i>Plain</span>
+                        </label>
                         <label class="choice" title="Dark frame, blue accent, date and count">
-                            <input type="radio" name="exportTheme" value="signal" checked>
+                            <input type="radio" name="exportTheme" value="signal">
                             <span><i class="theme-swatch signal" aria-hidden="true"></i>Signal</span>
                         </label>
                         <label class="choice" title="Light print with a caption under the photo">
@@ -155,7 +159,7 @@
                         </label>
                     </div>
                 </div>
-                <p class="hint">The theme frames both the GIF and the composite: color, type, dates, and progress.</p>
+                <p class="hint">Plain exports the photos only. The other themes add a frame, type, dates, and progress to both the GIF and the composite.</p>
             </section>
 
             <div class="actions">
